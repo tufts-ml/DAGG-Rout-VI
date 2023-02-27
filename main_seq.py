@@ -18,6 +18,9 @@ from model import create_models
 from train_seq import train
 
 
+# TODO: add documentation to all functions 
+
+
 if __name__ == '__main__':
     args = Args()
     args = args.update_args()
@@ -89,6 +92,8 @@ if __name__ == '__main__':
     with open(os.path.join(args.experiment_path, "configuration.txt"), 'w') as f:
         json.dump(args.__dict__, f, indent=2)
 
+
+    # TODO: remove the GraphRNN branch
     if args.note == 'GraphRNN':
         processor = Graph_to_Adj_Matrix(args, feature_map, random_bfs=True)
     elif args.note == 'DAGG':
@@ -96,11 +101,10 @@ if __name__ == '__main__':
         args.feature_len = processor.feature_len
 
 
+    # "feature_map" specifies the properties of graphs to be generated 
+    # TODO: separate the intialization of the generative and inference models 
     gmodel, model = create_models(args, feature_map)
 
-
-
-
-
+     
     train(args, model, gmodel, feature_map, dataloader_train, processor)
 

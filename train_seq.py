@@ -26,7 +26,7 @@ def preprocess_copy(graphs, sample_size, device):
 
     return batch_dG, batch_dGX, nx_g
 
-
+# remove the epoch argument from the argument, and move the print clause out 
 def train_epoch(
         epoch, args, pmodel, gmodel, dataloader_train,optimizer, scheduler, log_history, feature_map, processor):
     # Set training mode for modules
@@ -47,6 +47,8 @@ def train_epoch(
         total_loss = total_loss + elbo
 
         spent = time.time() - st
+
+        #  
         if batch_id % args.print_interval == 0:
             print('epoch {} batch {}: elbo is {}, time spent is {}.'.format(epoch, batch_id, elbo,spent), flush=True)
 
@@ -64,6 +66,9 @@ def train_epoch(
     return total_loss / batch_count
 
 
+# TODO: remove epoch from the argument list
+# TODO: remove processor from the argument list 
+# TODO: remove feature_map from the argument list 
 def train_batch(epoch, args, pmodel, gmodel,optimizer, dg, nx_g, embedding, feature_map, processor):
 
     # Evaluate model, get costs and log probabilities
@@ -85,7 +90,10 @@ def train_batch(epoch, args, pmodel, gmodel,optimizer, dg, nx_g, embedding, feat
     elif args.note == 'DAGG':
         data = [processor(nx_g, perms) for perms in pis]
         data = collate(data)
+
+        # TODO: see if we can remove this dictionray entry 
         log_joint = -gmodel['gmodel'](data, z=None)
+
         # Reinforce: [log p(G,\pi|z)  - log q(\pi|G)] * dlog q(\pi|G)
         fake_nll_q = -torch.mean(
             torch.mean((log_joint.detach() - pi_log_likelihood.detach()) * pi_log_likelihood))
@@ -125,7 +133,7 @@ def train_batch(epoch, args, pmodel, gmodel,optimizer, dg, nx_g, embedding, feat
     return elbo.item()
 
 
-
+# TODO: suggested function name: test  
 def test_data(args, model, gmodel, dataloader_validate, processor,feature_map):
     for _, net in gmodel.items():
         net.eval()
@@ -169,16 +177,20 @@ def train(args, model, gmodel,feature_map, dataloader_train , processor):
         #     filter(lambda p: p.requires_grad, net.parameters()), lr=args.lr,
         #     weight_decay=5e-5)
         optimizer['optimizer_'+name] = optim.Adam(net.parameters(), lr=args.lr)
+
+    # TODO: check whether two optimizers are needed, or given an explanation 
     if args.enable_gcn:
         optimizer['optimizer_attention'] = optim.Adam(model['pmodel'].parameters(), lr=args.lr)
 
-
+    
+    # TODO: combine this for loop with the one in line 167
     scheduler = {}
     for name, net in gmodel.items():
         scheduler['scheduler_' + name] = MultiStepLR(
             optimizer['optimizer_' + name], milestones=args.milestones,
             gamma=args.gamma)
 
+    # TODO: combine this if with the one in 174  
     if args.enable_gcn:
         scheduler['scheduler_attention'] = MultiStepLR(
             optimizer['optimizer_attention'], milestones=args.milestones,
@@ -194,6 +206,7 @@ def train(args, model, gmodel,feature_map, dataloader_train , processor):
     else:
         writer = None
 
+    # TODO: change this while loop to a for loop
     epoch=0  #to be deleted when load ready
     while epoch < args.epochs:
         # train
@@ -208,7 +221,6 @@ def train(args, model, gmodel,feature_map, dataloader_train , processor):
         print('Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
         save_model(epoch, args, gmodel, model, feature_map=feature_map)
         print('Model Saved - Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
-
 
 
         log_history['train_elbo'].append(loss)

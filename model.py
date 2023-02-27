@@ -10,7 +10,15 @@ from models.graph_decoder.att_decoder import AttentionDecoder
 from models.graph_decoder.train import Rout
 from models.graph_decoder.train_dependecy import att_decoder_dependency
 
+
+
+# TODO: separate the function into two models: the generative model, and the inference component  
+#def create_generative_model(args, feature_map):
 def create_models(args, feature_map):
+    """
+    Initialize a generative model.  
+    """
+    
 
     print('Producing model...')
 
@@ -26,10 +34,17 @@ def create_models(args, feature_map):
 
         edge_model = AttentionDecoder(args)
         update_model = AttentionDecoder(args)
+
+        # TODO: check these names
         gmodel =  Rout(args, args.withz, edge_model, update_model, feature_map)
         gmodel = {'gmodel': gmodel.to(args.device)}
 
 
+
+#def create_inference_model(args, feature_map):
+    """
+    Initialize an inference model.  
+    """
 
     len_node_vec = len(feature_map['node_forward'])
 

@@ -12,6 +12,7 @@ from torch.nn import DataParallel
 import numpy as np
 
 
+# TODO: Change the name 
 class AttentionDecoder(nn.Module):
     def __init__(self, args):
         super().__init__()

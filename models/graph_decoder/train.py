@@ -140,6 +140,9 @@ class att_decoder_rnn_fast(nn.Module):
         ll=loss_node      #TODO: add node label/edge label
         return ll
 
+# DAGG
+
+# TODO: also put the sampling function here 
 class Rout(nn.Module):
     def __init__(self, args, withz, decoding_model, update_model, feature_map):
         super().__init__()
@@ -162,6 +165,8 @@ class Rout(nn.Module):
             #no decoding z given, optimize this one instead.
             self.z_placeholder = nn.Parameter(torch.Tensor(self.args.n_embd))
             self.z_placeholder.data.uniform_(-1, 1)
+
+    # probability calculation
     def forward(self, data,z=None):
         '''
 

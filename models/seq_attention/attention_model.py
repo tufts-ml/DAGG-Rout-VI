@@ -39,6 +39,9 @@ class AttentionModelFixed(NamedTuple):
         )
 
 
+# TODO: class name should be Rout
+# TODO: wrap the forward function into a sampling function  
+ 
 class AttentionModel(nn.Module):
 
     def __init__(self,
@@ -117,6 +120,9 @@ class AttentionModel(nn.Module):
         if temp is not None:  # Do not change temperature if not provided
             self.temp = temp
 
+    
+    # TODO: input contains node orders, should use name: batch_order
+    # TODO: the second argument should be a graph
     def forward(self, input, batch_g, nx_g, return_pi=True):
         """
         :param input: (batch_size, graph_size, node_dim) input node features or dictionary with multiple tensors
@@ -287,6 +293,7 @@ class AttentionModel(nn.Module):
         # Collected lists, return Tensor
         return torch.stack(outputs, 1), torch.stack(sequences, 1)
 
+    
     def sample_many(self, input, batch_rep=1, iter_rep=1):
         """
         :param input: (batch_size, graph_size, node_dim) input node features
