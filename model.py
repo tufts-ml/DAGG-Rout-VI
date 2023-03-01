@@ -1,20 +1,16 @@
-# from models.dgmg.model import create_model as create_model_dgmg
-from models.graph_rnn.model import create_model as create_model_graph_rnn
-from models.gran.model import create_model as create_model_gran
 from models.seq_attention.attention_model import AttentionModel, generation
 from models.gcn.net.appnp_net_node import APPNET
 from models.gcn.net.gat_net_node import GATNet
 from models.gcn.net.gcn_net_node import GCNNet
-from models.graph_encoder.model import g_encoder
-from models.graph_decoder.att_decoder import AttentionDecoder
-from models.graph_decoder.train import Rout
-from models.graph_decoder.train_dependecy import att_decoder_dependency
+from models.DAGG.att_decoder import AttentionDecoder
+from models.DAGG.model import DAGG
+
 
 
 
 # TODO: separate the function into two models: the generative model, and the inference component  
 #def create_generative_model(args, feature_map):
-def create_models(args, feature_map):
+def create_generative_model(args, feature_map):
     """
     Initialize a generative model.  
     """
@@ -22,11 +18,9 @@ def create_models(args, feature_map):
 
     print('Producing model...')
 
-    # generative model 
-    if args.note == 'GraphRNN':
-        gmodel = create_model_graph_rnn(args, feature_map)
 
-    elif args.note == 'DAGG':
+
+    if args.note == 'DAGG':
         # decoding_model= AttentionDecoder(args)
         # update_model = AttentionDecoder(args)
         # gmodel=att_decoder_dependency(args, args.withz, decoding_model, update_model, feature_map)
@@ -36,12 +30,14 @@ def create_models(args, feature_map):
         update_model = AttentionDecoder(args)
 
         # TODO: check these names
-        gmodel =  Rout(args, args.withz, edge_model, update_model, feature_map)
-        gmodel = {'gmodel': gmodel.to(args.device)}
+        gmodel =  DAGG(args, args.withz, edge_model, update_model, feature_map)
+
+
+    return gmodel
 
 
 
-#def create_inference_model(args, feature_map):
+def create_inference_model(args, feature_map):
     """
     Initialize an inference model.  
     """
@@ -56,7 +52,7 @@ def create_models(args, feature_map):
     elif args.gcn_type == 'appnp':
         gcn = APPNET(args, len_node_vec, out_dim=32).to(args.device)
 
-    pmodel = AttentionModel(embedding_dim = args.gcn_out_dim,
+    Rout = AttentionModel(embedding_dim = args.gcn_out_dim,
                  hidden_dim=32,
                  state=generation,
                  args=args,
@@ -70,9 +66,9 @@ def create_models(args, feature_map):
                  n_heads=8,
                  checkpoint_encoder=False,
                  shrink_size=None).to(args.device)
-    ppmodel={'pmodel':pmodel}
 
-    return gmodel, ppmodel
+
+    return Rout
 
 
 

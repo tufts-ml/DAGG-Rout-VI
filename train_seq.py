@@ -1,7 +1,6 @@
 import torch
 import dgl
 import time
-import os
 import pandas as pd
 from collections import defaultdict
 from torch import optim
@@ -9,11 +8,8 @@ from torch.optim.lr_scheduler import MultiStepLR
 from torch.nn.utils import clip_grad_value_
 from torch.utils.tensorboard import SummaryWriter
 from utils import save_model, load_model, get_model_attribute, get_last_checkpoint
-from models.graph_rnn.train import evaluate_loss as eval_loss_graph_rnn
-from models.gran.model import evaluate_loss as eval_loss_gran
 from torch.utils.data._utils.collate import default_collate as collate
-from models.graph_rnn.data import Graph_to_Adj_Matrix
-from models.graph_decoder.data import Graph_to_att_Matrix
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''';;'[................/,m,//'''''
 
 
 
@@ -27,13 +23,11 @@ def preprocess_copy(graphs, sample_size, device):
     return batch_dG, batch_dGX, nx_g
 
 # remove the epoch argument from the argument, and move the print clause out 
-def train_epoch(
-        epoch, args, pmodel, gmodel, dataloader_train,optimizer, scheduler, log_history, feature_map, processor):
+def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_history, feature_map, processor,epoch):
     # Set training mode for modules
-    model=pmodel['pmodel']
-    model.train()
-    for _, net in gmodel.items():
-        net.train()
+
+    Rout.train()
+    DAGG.train()
 
     batch_count = len(dataloader_train)
     total_loss = 0.0
@@ -43,7 +37,7 @@ def train_epoch(
         st = time.time()
         dg, embedding, nx_g = preprocess_copy(graphs, args.sample_size, args.device)
 
-        elbo = train_batch(epoch, args, model, gmodel, optimizer,dg, nx_g, embedding, feature_map, processor)
+        elbo = train_batch(args, DAGG, Rout, optimizer,dg, nx_g, embedding, processor)
         total_loss = total_loss + elbo
 
         spent = time.time() - st
@@ -59,52 +53,25 @@ def train_epoch(
         for _, sched in scheduler.items():
             sched.step()
 
-        # if args.log_tensorboard:
-        #     summary_writer.add_scalar('{} {} Loss/train batch'.format(
-        #         args.note, args.graph_type), loss, batch_id + batch_count * epoch)
-
     return total_loss / batch_count
 
 
-# TODO: remove epoch from the argument list
-# TODO: remove processor from the argument list 
-# TODO: remove feature_map from the argument list 
-def train_batch(epoch, args, pmodel, gmodel,optimizer, dg, nx_g, embedding, feature_map, processor):
+
+# TODO: remove processor from the argument list
+def train_batch(args, DAGG, Rout,optimizer, dg, nx_g, embedding, processor):
 
     # Evaluate model, get costs and log probabilities
-    pi_log_likelihood, pis = pmodel(embedding, dg, nx_g, return_pi=True)
+    pi_log_likelihood, pis = Rout(embedding, dg, nx_g, return_pi=True)
 
 
-
-    if args.note == 'GraphRNN':
-        # put the original GraphRNN here
-
-        data = [processor(nx_g, perms) for perms in pis]
-        data = collate(data)
-
-        # log p(G, pi | z)
-        log_joint = -eval_loss_graph_rnn(args, gmodel, data, None, feature_map)
-        fake_nll_q = -torch.mean(
-            torch.mean((log_joint.detach() - pi_log_likelihood.detach()) * pi_log_likelihood))
-
-    elif args.note == 'DAGG':
-        data = [processor(nx_g, perms) for perms in pis]
-        data = collate(data)
-
-        # TODO: see if we can remove this dictionray entry 
-        log_joint = -gmodel['gmodel'](data, z=None)
-
-        # Reinforce: [log p(G,\pi|z)  - log q(\pi|G)] * dlog q(\pi|G)
-        fake_nll_q = -torch.mean(
-            torch.mean((log_joint.detach() - pi_log_likelihood.detach()) * pi_log_likelihood))
-
-    # Calculate loss
-    #reinforce_loss = ((cost - bl_val) * log_likelihood).mean()
+    data = [processor(nx_g, perms) for perms in pis]
+    data = collate(data)
 
 
+    log_joint = -DAGG(data, z=None)
 
-
-
+    # Reinforce: [log p(G,\pi|z)  - log q(\pi|G)] * dlog q(\pi|G)
+    fake_nll_q = -torch.mean(torch.mean((log_joint.detach() - pi_log_likelihood.detach()) * pi_log_likelihood))
 
     # elbo(G, z|pi) = log p(G,\pi|z) - kl [q(z|G,\pi)||q(z)]
     nll_p = -torch.mean(log_joint)
@@ -119,12 +86,11 @@ def train_batch(epoch, args, pmodel, gmodel,optimizer, dg, nx_g, embedding, feat
     loss.backward()
     # Clip gradient norms and get (clipped) gradient norms for logging
     if args.clip == True:
-        for _, net in gmodel.items():
-            clip_grad_value_(net.parameters(), 1.0)
+        clip_grad_value_(DAGG.parameters(), 1.0)
 
 
-    for _, opt in optimizer.items():
-        opt.step()
+
+    optimizer.step()
 
 
     elbo = torch.mean(log_joint.detach() - pi_log_likelihood.detach())
@@ -134,67 +100,39 @@ def train_batch(epoch, args, pmodel, gmodel,optimizer, dg, nx_g, embedding, feat
 
 
 # TODO: suggested function name: test  
-def test_data(args, model, gmodel, dataloader_validate, processor,feature_map):
-    for _, net in gmodel.items():
-        net.eval()
-    model.eval()
+def test(args, DAGG, Rout, dataloader_validate, processor,feature_map):
+
+    DAGG.eval()
+    Rout.eval()
 
     batch_count = len(dataloader_validate)
     with torch.no_grad():
-        total_loss = 0.0
+        total_elbo = 0.0
         ll_qs = 0.0
         for _, graphs in enumerate(dataloader_validate):
             dg, embedding, nx_g = preprocess_copy(graphs, args.sample_size, args.device)
-            log_likelihood, pis = model(embedding, dg, nx_g, return_pi=True)
-            if args.note == 'GraphRNN':
-                # data process and training for graphRNN
+            log_likelihood, pis = Rout(embedding, dg, nx_g, return_pi=True)
 
-                data = [processor(nx_g, perms) for perms in pis]
-                data = collate(data)
-                cost = -eval_loss_graph_rnn(args, gmodel, data, feature_map)
 
-            # Calculate loss
-            # reinforce_loss = ((cost - bl_val) * log_likelihood).mean()
-            fake_nll_q = -torch.mean(torch.mean((cost.detach() - log_likelihood.detach()) * log_likelihood))
-            nll_p = -torch.mean(cost)
+            dg, embedding, nx_g = preprocess_copy(graphs, args.sample_size, args.device)
+            data = [processor(nx_g, perms) for perms in pis]
+            log_joint = -DAGG(data, z=None)
+            elbo = -torch.mean(log_joint.detach() - log_likelihood.detach())
+            total_elbo = total_elbo + elbo
 
-            #loss = fake_nll_q + nll_p
 
-            elbo = torch.mean(cost.detach() - log_likelihood.detach())
-            total_loss = total_loss + elbo
-            ll_qs = ll_qs + torch.mean(log_likelihood).item()
 
-    return total_loss / batch_count, ll_qs / batch_count
+
+    return total_elbo / batch_count, ll_qs / batch_count
 
 
 # Main training function
 
-def train(args, model, gmodel,feature_map, dataloader_train , processor):
+def train(args, DAGG, Rout,feature_map, dataloader_train , processor):
 
-    optimizer = {}
-    for name, net in gmodel.items():
-        # optimizer['optimizer_' + name] = optim.Adam(
-        #     filter(lambda p: p.requires_grad, net.parameters()), lr=args.lr,
-        #     weight_decay=5e-5)
-        optimizer['optimizer_'+name] = optim.Adam(net.parameters(), lr=args.lr)
+    optimizer = optim.Adam([DAGG.parameters(), Rout.parameters()], lr=args.lr)
+    scheduler = MultiStepLR(optimizer, milestones=args.milestones,gamma=args.gamma)
 
-    # TODO: check whether two optimizers are needed, or given an explanation 
-    if args.enable_gcn:
-        optimizer['optimizer_attention'] = optim.Adam(model['pmodel'].parameters(), lr=args.lr)
-
-    
-    # TODO: combine this for loop with the one in line 167
-    scheduler = {}
-    for name, net in gmodel.items():
-        scheduler['scheduler_' + name] = MultiStepLR(
-            optimizer['optimizer_' + name], milestones=args.milestones,
-            gamma=args.gamma)
-
-    # TODO: combine this if with the one in 174  
-    if args.enable_gcn:
-        scheduler['scheduler_attention'] = MultiStepLR(
-            optimizer['optimizer_attention'], milestones=args.milestones,
-            gamma=args.gamma)
 
 
     log_history = defaultdict(list)
@@ -206,12 +144,11 @@ def train(args, model, gmodel,feature_map, dataloader_train , processor):
     else:
         writer = None
 
-    # TODO: change this while loop to a for loop
-    epoch=0  #to be deleted when load ready
-    while epoch < args.epochs:
+
+
+    for epoch  in range(args.epochs):
         # train
-        loss= train_epoch(
-            epoch, args, model, gmodel,dataloader_train,optimizer, scheduler, log_history, feature_map, processor)
+        loss= train_epoch(args, DAGG, Rout,dataloader_train,optimizer, scheduler, log_history, feature_map, processor, epoch)
 
         epoch += 1
 
@@ -219,7 +156,7 @@ def train(args, model, gmodel,feature_map, dataloader_train , processor):
             writer.add_scalar('{} {} Loss/train'.format(args.note, args.graph_type), loss, epoch)
 
         print('Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
-        save_model(epoch, args, gmodel, model, feature_map=feature_map)
+        save_model(epoch, args, DAGG, Rout, feature_map=feature_map)
         print('Model Saved - Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
 
 

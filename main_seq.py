@@ -93,18 +93,16 @@ if __name__ == '__main__':
         json.dump(args.__dict__, f, indent=2)
 
 
-    # TODO: remove the GraphRNN branch
-    if args.note == 'GraphRNN':
-        processor = Graph_to_Adj_Matrix(args, feature_map, random_bfs=True)
-    elif args.note == 'DAGG':
+
+    if args.note == 'DAGG':
         processor = Graph_to_att_Matrix(args, feature_map)
         args.feature_len = processor.feature_len
 
 
     # "feature_map" specifies the properties of graphs to be generated 
     # TODO: separate the intialization of the generative and inference models 
-    gmodel, model = create_models(args, feature_map)
+    DAGG, Rout = create_models(args, feature_map)
 
      
-    train(args, model, gmodel, feature_map, dataloader_train, processor)
+    train(args, DAGG, Rout, feature_map, dataloader_train, processor)
 
