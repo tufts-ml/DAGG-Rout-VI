@@ -8,8 +8,7 @@ from torch.optim.lr_scheduler import MultiStepLR
 from torch.nn.utils import clip_grad_value_
 from torch.utils.tensorboard import SummaryWriter
 from utils import save_model, load_model, get_model_attribute, get_last_checkpoint
-from torch.utils.data._utils.collate import default_collate as collate
-''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''';;'[................/,m,//'''''
+
 
 
 
@@ -23,8 +22,7 @@ def preprocess_copy(graphs, sample_size, device):
     return batch_dG, batch_dGX, nx_g
 
 # remove the epoch argument from the argument, and move the print clause out 
-def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_history, feature_map, processor,epoch):
-    # Set training mode for modules
+def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_history, feature_map,epoch):
 
     Rout.train()
     DAGG.train()
@@ -37,7 +35,7 @@ def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_his
         st = time.time()
         dg, embedding, nx_g = preprocess_copy(graphs, args.sample_size, args.device)
 
-        elbo = train_batch(args, DAGG, Rout, optimizer,dg, nx_g, embedding, processor)
+        elbo = train_batch(args, DAGG, Rout, optimizer,dg, nx_g, embedding)
         total_loss = total_loss + elbo
 
         spent = time.time() - st
@@ -64,11 +62,10 @@ def train_batch(args, DAGG, Rout,optimizer, dg, nx_g, embedding, processor):
     pi_log_likelihood, pis = Rout(embedding, dg, nx_g, return_pi=True)
 
 
-    data = [processor(nx_g, perms) for perms in pis]
-    data = collate(data)
 
 
-    log_joint = -DAGG(data, z=None)
+
+    log_joint = -DAGG(nx_g, pis)
 
     # Reinforce: [log p(G,\pi|z)  - log q(\pi|G)] * dlog q(\pi|G)
     fake_nll_q = -torch.mean(torch.mean((log_joint.detach() - pi_log_likelihood.detach()) * pi_log_likelihood))

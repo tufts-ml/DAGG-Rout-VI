@@ -4,6 +4,7 @@ from models.gcn.net.gat_net_node import GATNet
 from models.gcn.net.gcn_net_node import GCNNet
 from models.DAGG.att_decoder import AttentionDecoder
 from models.DAGG.model import DAGG
+from models.DAGG.data import Graph_to_att_Matrix
 
 
 
@@ -21,16 +22,14 @@ def create_generative_model(args, feature_map):
 
 
     if args.note == 'DAGG':
-        # decoding_model= AttentionDecoder(args)
-        # update_model = AttentionDecoder(args)
-        # gmodel=att_decoder_dependency(args, args.withz, decoding_model, update_model, feature_map)
-        # gmodel={'gmodel':gmodel.to(args.device)}
 
         edge_model = AttentionDecoder(args)
         update_model = AttentionDecoder(args)
+        processor = Graph_to_att_Matrix(args, feature_map)
+        args.feature_len = processor.feature_len
 
         # TODO: check these names
-        gmodel =  DAGG(args, args.withz, edge_model, update_model, feature_map)
+        gmodel =  DAGG(args, args.withz, edge_model, update_model, feature_map, processor)
 
 
     return gmodel

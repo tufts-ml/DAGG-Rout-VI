@@ -9,7 +9,7 @@ import bisect
 import networkx as nx
 import numpy as np
 from tqdm.auto import tqdm
-import graspologic
+#import graspologic
 
 from utils import mkdir, caveman_special, n_community, perturb_new, save_graphs
 from datasets.preprocess import (

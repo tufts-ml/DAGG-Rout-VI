@@ -9,12 +9,7 @@ from utils import create_dirs
 from datasets.process_dataset import create_graphs
 from datasets.preprocess import calc_max_prev_node
 from models.data import Graph_from_file, NumpyTupleDataset
-from models.graph_rnn.data import Graph_to_Adj_Matrix, Graph_Adj_Matrix
-from models.gcn.helper import legal_perms_sampler, mp_sampler
-from models.gran.data import GRANData
-from models.graph_decoder.data import Graph_to_att_Matrix
-
-from model import create_models
+from model import create_generative_model, create_inference_model
 from train_seq import train
 
 
@@ -94,14 +89,14 @@ if __name__ == '__main__':
 
 
 
-    if args.note == 'DAGG':
-        processor = Graph_to_att_Matrix(args, feature_map)
-        args.feature_len = processor.feature_len
+
+
 
 
     # "feature_map" specifies the properties of graphs to be generated 
     # TODO: separate the intialization of the generative and inference models 
-    DAGG, Rout = create_models(args, feature_map)
+    DAGG = create_generative_model(args, feature_map)
+    Rout = create_inference_model(args, feature_map)
 
      
     train(args, DAGG, Rout, feature_map, dataloader_train, processor)

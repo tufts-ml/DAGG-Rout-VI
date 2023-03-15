@@ -1,6 +1,6 @@
 import torch
 import networkx as nx
-from models.graph_rnn.helper import graph_to_matrix, get_attributes_len_for_graph_rnn
+from models.DAGG.helper import graph_to_matrix, get_attributes_len_for_graph_rnn
 
 class Graph_to_att_Matrix():
     def __init__(self, args, feature_map):
