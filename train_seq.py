@@ -55,8 +55,8 @@ def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_his
 
 
 
-# TODO: remove processor from the argument list
-def train_batch(args, DAGG, Rout,optimizer, dg, nx_g, embedding, processor):
+
+def train_batch(args, DAGG, Rout,optimizer, dg, nx_g, embedding):
 
     # Evaluate model, get costs and log probabilities
     pi_log_likelihood, pis = Rout(embedding, dg, nx_g, return_pi=True)
@@ -97,7 +97,7 @@ def train_batch(args, DAGG, Rout,optimizer, dg, nx_g, embedding, processor):
 
 
 # TODO: suggested function name: test  
-def test(args, DAGG, Rout, dataloader_validate, processor,feature_map):
+def test(args, DAGG, Rout, dataloader_validate, feature_map):
 
     DAGG.eval()
     Rout.eval()
@@ -112,8 +112,7 @@ def test(args, DAGG, Rout, dataloader_validate, processor,feature_map):
 
 
             dg, embedding, nx_g = preprocess_copy(graphs, args.sample_size, args.device)
-            data = [processor(nx_g, perms) for perms in pis]
-            log_joint = -DAGG(data, z=None)
+            log_joint = -DAGG(nx_g, pis)
             elbo = -torch.mean(log_joint.detach() - log_likelihood.detach())
             total_elbo = total_elbo + elbo
 
@@ -125,7 +124,7 @@ def test(args, DAGG, Rout, dataloader_validate, processor,feature_map):
 
 # Main training function
 
-def train(args, DAGG, Rout,feature_map, dataloader_train , processor):
+def train(args, DAGG, Rout,feature_map, dataloader_train):
 
     optimizer = optim.Adam([DAGG.parameters(), Rout.parameters()], lr=args.lr)
     scheduler = MultiStepLR(optimizer, milestones=args.milestones,gamma=args.gamma)
@@ -145,7 +144,7 @@ def train(args, DAGG, Rout,feature_map, dataloader_train , processor):
 
     for epoch  in range(args.epochs):
         # train
-        loss= train_epoch(args, DAGG, Rout,dataloader_train,optimizer, scheduler, log_history, feature_map, processor, epoch)
+        loss= train_epoch(args, DAGG, Rout,dataloader_train,optimizer, scheduler, log_history, feature_map,epoch)
 
         epoch += 1
 
