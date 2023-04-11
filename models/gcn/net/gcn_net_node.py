@@ -28,6 +28,8 @@ class GCNNet(nn.Module):
 
         self.embedding_h = nn.Embedding(in_dim_node, hidden_dim)  # node feat is an integer
         self.in_feat_dropout = nn.Dropout(in_feat_dropout)
+        self.first_gcn = GCNLayer(in_dim_node, hidden_dim, F.relu, dropout,
+                                              self.batch_norm, self.residual)
         self.layers = nn.ModuleList([GCNLayer(hidden_dim, hidden_dim, F.relu, dropout,
                                               self.batch_norm, self.residual) for _ in range(n_layers - 1)])
         self.layers.append(GCNLayer(hidden_dim, out_dim, F.relu, dropout, self.batch_norm, self.residual))
@@ -54,10 +56,8 @@ class GCNNet(nn.Module):
         # p: positional(order) embedding
         # input embedding
 
-        h = self.embedding_h(torch.squeeze(h))
-        if p is not None:
-            p = self.positionalencoding(g.batch_num_nodes().tolist(), p)
-            h = h + p
+        h = self.first_gcn(g,torch.squeeze(h))
+
 
         # GCN
         for conv in self.layers:

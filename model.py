@@ -45,11 +45,11 @@ def create_inference_model(args, feature_map):
 
     # q distribution q(pi | G)
     if args.gcn_type == 'gcn':
-        gcn = GCNNet(args, len_node_vec, out_dim=32).to(args.device)
+        gcn = GCNNet(args, 5, out_dim=32).to(args.device)
     elif args.gcn_type == 'gat':
-        gcn = GATNet(args, len_node_vec, out_dim=32).to(args.device)
+        gcn = GATNet(args, 5, out_dim=32).to(args.device)
     elif args.gcn_type == 'appnp':
-        gcn = APPNET(args, len_node_vec, out_dim=32).to(args.device)
+        gcn = APPNET(args, 5, out_dim=32).to(args.device)
 
     Rout = AttentionModel(embedding_dim = args.gcn_out_dim,
                  hidden_dim=32,

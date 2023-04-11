@@ -1,12 +1,11 @@
 import torch
 from torch import nn
-from torch.utils.checkpoint import checkpoint
 import math
 from typing import NamedTuple
 from models.seq_attention.sequtils import  compute_in_batches,CachedLookup,sample_many
-
-from models.seq_attention.graph_encoder import GraphAttentionEncoder
-from models.seq_attention.generation import generation
+from torch_geometric.utils import (get_laplacian, to_scipy_sparse_matrix)
+from scipy.sparse.linalg import eigs, eigsh
+import numpy as np
 from torch.nn import DataParallel
 
 
@@ -120,7 +119,32 @@ class AttentionModel(nn.Module):
         if temp is not None:  # Do not change temperature if not provided
             self.temp = temp
 
-    
+    def add_PE(self, data, k=5):
+        eig_fn = eigsh
+
+        num_nodes = data.num_nodes()
+        edges = data.edges()
+        edge_index = torch.stack(edges)
+        edge_index, edge_weight = get_laplacian(
+            edge_index,
+            edge_weight=None,
+            normalization='sym',
+            num_nodes=num_nodes)
+
+        L = to_scipy_sparse_matrix(edge_index, edge_weight, num_nodes)
+
+        eig_vals, eig_vecs = eig_fn(
+            L,
+            k=k + 1,
+            which='SA',
+            return_eigenvectors=True)
+
+        eig_vecs = np.real(eig_vecs[:, eig_vals.argsort()])
+        pe = torch.from_numpy(eig_vecs[:, 1:k + 1])
+        sign = -1 + 2 * torch.randint(0, 2, (k,))
+        pe *= sign
+        return pe.to(edge_index.device)
+
     # TODO: input contains node orders, should use name: batch_order
     # TODO: the second argument should be a graph
     def forward(self, input, batch_g, nx_g, return_pi=True):
@@ -131,21 +155,9 @@ class AttentionModel(nn.Module):
         :return:
         """
 
-        # if self.checkpoint_encoder and self.training:  # Only checkpoint if we need gradients
-        #     embeddings, _ = checkpoint(self.embedder, self._init_embed(input))
-        # else:
-        #     embeddings, _ = self.embedder(self._init_embed(input))
-
-        # if self.gcn_type == 'gcn':
-        #     self.gcn = GCNNet(self.args, input.size(1), out_dim=self.args.hidden_dim).to(self.args.device)
-        # elif self.gcn_type == 'gat':
-        #     self.gcn = GATNet(self.args, input.size(1), out_dim=self.args.hidden_dim).to(self.args.device)
-        # elif self.gcn_type == 'appnp':
-        #     self.gcn = APPNET(self.args, input.size(1), out_dim=self.args.hidden_dim).to(self.args.device)
-
-        embeddings = self.gcn(batch_g, input.view(-1, input.size(2)))
+        embeddings = self.add_PE(batch_g)
+        embeddings = self.gcn(batch_g, embeddings)
         embeddings = embeddings.view(input.size(0), input.size(1), -1)
-
 
         _log_p, pi = self._inner(embeddings)
 
