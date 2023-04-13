@@ -131,3 +131,28 @@ class generation(NamedTuple):
 
     def get_mask(self):
         return self.visited > 0  # Hacky way to return bool or uint8 depending on pytorch version
+
+    def get_connected_mask(self, edge_index):
+        def find_connected_nodes(edge_index, nodes):
+            edge_index =edge_index.cpu().numpy()
+            connected_nodes = set()
+            for sender, receiver in zip(edge_index[0], edge_index[1]):
+                if sender in nodes:
+                    connected_nodes.add(receiver)
+                elif receiver in nodes:
+                    connected_nodes.add(sender)
+            return list(connected_nodes)
+        if self.first==True:
+            return self.visited > 0
+        else:
+            mask = self.visited > 0  # Hacky way to return bool or uint8 depending on pytorch version
+            add_mask = torch.ones_like(mask)
+            add_mask = add_mask>0 #all True
+            batch_size=self.visited.size()[0]
+            for b in range(batch_size):
+                #starting get mask for graph b
+                current_nodes = self.visited[b,0].nonzero(as_tuple=True)[0].cpu().numpy()
+                connected_nodes = find_connected_nodes(edge_index, current_nodes)
+                add_mask[b,0,connected_nodes] = False #unmask connected graph
+            return mask+add_mask
+

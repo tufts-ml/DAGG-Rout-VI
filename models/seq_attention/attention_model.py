@@ -147,7 +147,7 @@ class AttentionModel(nn.Module):
 
     # TODO: input contains node orders, should use name: batch_order
     # TODO: the second argument should be a graph
-    def forward(self, input, batch_g, nx_g, return_pi=True):
+    def forward(self,g, batch_size, return_pi=True):
         """
         :param input: (batch_size, graph_size, node_dim) input node features or dictionary with multiple tensors
         :param return_pi: whether to return the output sequences, this is optional as it is not compatible with
@@ -155,11 +155,13 @@ class AttentionModel(nn.Module):
         :return:
         """
 
-        embeddings = self.add_PE(batch_g)
-        embeddings = self.gcn(batch_g, embeddings)
-        embeddings = embeddings.view(input.size(0), input.size(1), -1)
+        embeddings = self.add_PE(g)
+        embeddings = self.gcn(g, embeddings)
+        embeddings = embeddings.repeat(batch_size, 1, 1)
 
-        _log_p, pi = self._inner(embeddings)
+        edges = g.edges()
+        edge_index = torch.stack(edges)
+        _log_p, pi = self._inner(embeddings, edge_index)
 
         #cost, mask = self.problem.get_costs(nx_g, pi, self.model, self.args, self.feature_map)
 
@@ -252,7 +254,7 @@ class AttentionModel(nn.Module):
         # TSP
         return self.init_embed(input)
 
-    def _inner(self, embeddings):
+    def _inner(self, embeddings, edge_index):
 
         outputs = []
         sequences = []
@@ -280,7 +282,7 @@ class AttentionModel(nn.Module):
                     state = state[unfinished]
                     fixed = fixed[unfinished]
 
-            log_p, mask = self._get_log_p(fixed, state)
+            log_p, mask = self._get_log_p(fixed, state, edge_index)
 
             # Select the indices of the next nodes in the sequences, result (batch_size) long
             selected = self._select_node(log_p.exp()[:, 0, :], mask[:, 0, :])  # Squeeze out steps dimension
@@ -361,8 +363,8 @@ class AttentionModel(nn.Module):
         )
         return AttentionModelFixed(embeddings, fixed_context, *fixed_attention_node_data)
 
-    def _get_log_p_topk(self, fixed, state, k=None, normalize=True):
-        log_p, _ = self._get_log_p(fixed, state, normalize=normalize)
+    def _get_log_p_topk(self, fixed, state, edge_index, k=None, normalize=True):
+        log_p, _ = self._get_log_p(fixed, state, edge_index, normalize=normalize)
 
         # Return topk
         if k is not None and k < log_p.size(-1):
@@ -374,7 +376,7 @@ class AttentionModel(nn.Module):
             torch.arange(log_p.size(-1), device=log_p.device, dtype=torch.int64).repeat(log_p.size(0), 1)[:, None, :]
         )
 
-    def _get_log_p(self, fixed, state, normalize=True):
+    def _get_log_p(self, fixed, state, edge_index, normalize=True):
 
         # Compute query = context node embedding
         query = fixed.context_node_projected + \
@@ -384,7 +386,7 @@ class AttentionModel(nn.Module):
         glimpse_K, glimpse_V, logit_K = self._get_attention_node_data(fixed, state)
 
         # Compute the mask
-        mask = state.get_mask()
+        mask = state.get_mask(edge_index)
 
         # Compute logits (unnormalized log_p)
         log_p, glimpse = self._one_to_many_logits(query, glimpse_K, glimpse_V, logit_K, mask)
