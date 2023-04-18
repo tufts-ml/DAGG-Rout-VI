@@ -10,10 +10,11 @@ from datasets.process_dataset import create_graphs
 from datasets.preprocess import calc_max_prev_node
 from models.data import Graph_from_file, NumpyTupleDataset
 from model import create_generative_model, create_inference_model
+from models.DAGG.data import Graph_to_Adj_Matrix
 from train_seq import train
 
 
-# TODO: add documentation to all functions 
+
 
 
 if __name__ == '__main__':
@@ -86,15 +87,9 @@ if __name__ == '__main__':
     # save args
     with open(os.path.join(args.experiment_path, "configuration.txt"), 'w') as f:
         json.dump(args.__dict__, f, indent=2)
+    processor = Graph_to_Adj_Matrix(args, feature_map, random_bfs=True)
 
 
-
-
-
-
-
-    # "feature_map" specifies the properties of graphs to be generated 
-    # TODO: separate the intialization of the generative and inference models 
     DAGG = create_generative_model(args, feature_map)
     Rout = create_inference_model(args, feature_map)
 

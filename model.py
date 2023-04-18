@@ -5,12 +5,11 @@ from models.gcn.net.gcn_net_node import GCNNet
 from models.DAGG.att_decoder import AttentionDecoder
 from models.DAGG.model import DAGG
 from models.DAGG.data import Graph_to_att_Matrix
+from models.DAGG.attention import AttentionDecoder
 
 
 
 
-# TODO: separate the function into two models: the generative model, and the inference component  
-#def create_generative_model(args, feature_map):
 def create_generative_model(args, feature_map):
     """
     Initialize a generative model.  
@@ -23,16 +22,16 @@ def create_generative_model(args, feature_map):
 
     if args.note == 'DAGG':
 
-        edge_model = AttentionDecoder(args)
-        update_model = AttentionDecoder(args)
+
+        node_level_transformer = AttentionDecoder(args.embedding_size_node_level_transformer, n_head=4)
+        edge_level_transformer = AttentionDecoder(args.embedding_size_edge_level_transformer, n_head=4)
         processor = Graph_to_att_Matrix(args, feature_map)
         args.feature_len = processor.feature_len
 
-        # TODO: check these names
-        gmodel =  DAGG(args, args.withz, edge_model, update_model, feature_map, processor)
+        dagg =  DAGG(args, node_level_transformer, edge_level_transformer, feature_map, processor)
 
 
-    return gmodel
+    return dagg
 
 
 

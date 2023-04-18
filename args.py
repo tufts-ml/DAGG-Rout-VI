@@ -50,6 +50,24 @@ class Args:
         self.parser.add_argument('--initializer_range', type=float, default=0.02,
                                  help='activation type in transformer')
 
+        self.parser.add_argument('--max_prev_node', type=int, default=None,
+                                 help='max previous node that looks back for GraphRNN')
+        self.parser.add_argument('--hidden_size_node_level_transformer', type=int, default=128,
+                                 help='hidden size for node level transformer')
+        self.parser.add_argument('--embedding_size_node_level_transformer', type=int, default=64,
+                                 help='the size for node level transformer input')
+        self.parser.add_argument('--embedding_size_node_output', type=int, default=64,
+                                 help='the size of node output embedding')
+        self.parser.add_argument('--hidden_size_edge_level_transformer', type=int, default=16,
+                                 help='hidden size for edge level transformer')
+        self.parser.add_argument('--embedding_size_edge_level_transformer', type=int, default=8,
+                                 help='the size for edge level transformer input')
+        self.parser.add_argument('--embedding_size_edge_output', type=int, default=8,
+                                 help='the size of edge output embedding')
+        self.parser.add_argument('--num_layers', type=int, default=4, help='layers of rnn')
+        self.parser.add_argument('--nobfs', default=True, action='store_true',
+                                 help='whether to use bfs constraint during sampling')
+
 
 
 
@@ -60,31 +78,9 @@ class Args:
         self.parser.add_argument('--mp_num_workers', type=int, default=4, help='number of workers for permutation sampling')
         self.parser.add_argument('--sample_arch', default='eigen', help='type of sequential sampling style: { ORI|HX|CXH|transformer|eigen }')
 
-        # Specific to GraphRNN
-        self.parser.add_argument('--max_prev_node', type=int, default=None, help='max previous node that looks back for GraphRNN')
-        self.parser.add_argument('--hidden_size_node_level_rnn', type=int, default=128, help='hidden size for node level RNN')
-        self.parser.add_argument('--embedding_size_node_level_rnn', type=int, default=64, help='the size for node level RNN input')
-        self.parser.add_argument('--embedding_size_node_output', type=int, default=64, help='the size of node output embedding')
-        self.parser.add_argument('--hidden_size_edge_level_rnn', type=int, default=16, help='hidden size for edge level RNN')
-        self.parser.add_argument('--embedding_size_edge_level_rnn', type=int, default=8, help='the size for edge level RNN input')
-        self.parser.add_argument('--embedding_size_edge_output', type=int, default=8, help='the size of edge output embedding')
-        self.parser.add_argument('--num_layers', type=int, default=4, help='layers of rnn')
-        self.parser.add_argument('--nobfs', default=True, action='store_true', help='whether to use bfs constraint during sampling')
 
-        # # Specific to GRAN
-        # self.parser.add_argument('--num_mix_component', type=int, default=20, help='a')
-        # self.parser.add_argument('--is_sym', default=True, help='a')
-        # self.parser.add_argument('--block_size', type=int, default=1, help='1/2')
-        # self.parser.add_argument('--sample_stride', type=int, default=1, help='a')
-        # self.parser.add_argument('--hidden_dim', type=int, default=128, help='a')
-        # self.parser.add_argument('--embedding_dim', type=int, default=128, help='a')
-        # self.parser.add_argument('--num_GNN_layers', type=int, default=7, help='a')
-        # self.parser.add_argument('--num_GNN_prop', type=int, default=1, help='a')
-        # self.parser.add_argument('--dimension_reduce', default=True, help='a')
-        # self.parser.add_argument('--has_attention', default=True, help='a')
-        # self.parser.add_argument('--num_canonical_order', type=int, default=1, help="must be 1 during training")
-        # self.parser.add_argument('--edge_weight', type=float, default=1.0e+0, help="only used for baseline")
-        # self.parser.add_argument('--num_fwd_pass', type=int, default=1, help="bu zhi dao gan sha de, she cheng 1")
+
+
 
 
         # training config

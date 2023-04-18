@@ -12,14 +12,7 @@ from utils import save_model, load_model, get_model_attribute, get_last_checkpoi
 
 
 
-def preprocess_copy(graphs, sample_size, device):
-    unbatch_dG = [graph['dG'].to(device) for graph in graphs for _ in range(sample_size)]
-    batch_dG = dgl.batch(unbatch_dG)
-    batch_dGX = batch_dG.ndata['feat'].long()
-    batch_dGX=batch_dGX.view(sample_size, -1, batch_dGX.size()[1])
-    nx_g = graphs[0]['G'] #only support batch_size=1
 
-    return batch_dG, batch_dGX, nx_g
 
 # remove the epoch argument from the argument, and move the print clause out 
 def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_history, feature_map,epoch):
@@ -33,9 +26,9 @@ def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_his
     for batch_id, graphs in enumerate(dataloader_train):
 
         st = time.time()
-        dg, embedding, nx_g = preprocess_copy(graphs, args.sample_size, args.device)
 
-        elbo = train_batch(args, DAGG, Rout, optimizer,dg, nx_g, embedding)
+
+        elbo = train_batch(args, DAGG, Rout, optimizer,graphs[0]['dG'].to(args.device), graphs[0]['G'],feature_map)
         total_loss = total_loss + elbo
 
         spent = time.time() - st
@@ -59,7 +52,7 @@ def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_his
 def train_batch(args, DAGG, Rout,optimizer, dg, nx_g, embedding):
 
     # Evaluate model, get costs and log probabilities
-    pi_log_likelihood, pis = Rout(embedding, dg, nx_g, return_pi=True)
+    pi_log_likelihood, pis = Rout(dg, args.sample_size, return_pi=True)
 
 
 
@@ -76,8 +69,8 @@ def train_batch(args, DAGG, Rout,optimizer, dg, nx_g, embedding):
     loss = fake_nll_q + nll_p
 
     # Perform backward pass and optimization step
-    for _, opt in optimizer.items():
-        opt.zero_grad()
+
+    optimizer.zero_grad()
 
     # grad_norms = clip_grad_norms(optimizer.param_groups, opts.max_grad_norm)
     loss.backward()
@@ -107,12 +100,12 @@ def test(args, DAGG, Rout, dataloader_validate, feature_map):
         total_elbo = 0.0
         ll_qs = 0.0
         for _, graphs in enumerate(dataloader_validate):
-            dg, embedding, nx_g = preprocess_copy(graphs, args.sample_size, args.device)
-            log_likelihood, pis = Rout(embedding, dg, nx_g, return_pi=True)
+
+            log_likelihood, pis = Rout(graphs['dG'][0], args.sample_size, return_pi=True)
 
 
-            dg, embedding, nx_g = preprocess_copy(graphs, args.sample_size, args.device)
-            log_joint = -DAGG(nx_g, pis)
+
+            log_joint = -DAGG(graphs['G'][0], pis)
             elbo = -torch.mean(log_joint.detach() - log_likelihood.detach())
             total_elbo = total_elbo + elbo
 
