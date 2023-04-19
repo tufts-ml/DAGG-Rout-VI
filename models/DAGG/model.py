@@ -5,6 +5,10 @@ from torch.utils.data._utils.collate import default_collate as collate
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from models.layers import RNN, MLP_Plain, MLP_Softmax
 from models.DAGG.helper import get_attributes_len_for_graph_rnn
+import numpy as np
+import networkx as nx
+EPS = 1e-9
+
 
 
 # DAGG
@@ -412,7 +416,153 @@ class DAGG(nn.Module):
         return swapped_loss
 
     def sample(self, eval_args):
-        pass
+        train_args = eval_args.train_args
+        feature_map = get_model_attribute(
+            'feature_map', eval_args.model_path, eval_args.device)
+        train_args.device = eval_args.device
+
+        model = create_model(train_args, feature_map)
+        load_gmodel(eval_args.model_path, eval_args.device, model)
+
+        for _, net in model.items():
+            net.eval()
+
+        max_num_node = eval_args.max_num_node
+        len_node_vec, len_edge_vec, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
+            len(feature_map['node_forward']), len(feature_map['edge_forward']),
+            train_args.max_prev_node, train_args.max_head_and_tail)
+        feature_len = len_node_vec + num_nodes_to_consider * len_edge_vec
+
+        graphs = []
+
+        for _ in range(eval_args.count // eval_args.batch_size):
+            # model['node_level_rnn'].hidden = model['node_level_rnn'].init_hidden(
+            #     batch_size=eval_args.batch_size)
+
+            # [batch_size] * [num of nodes]
+            x_pred_node = np.zeros(
+                (eval_args.batch_size, max_num_node), dtype=np.int32)
+            # [batch_size] * [num of nodes] * [num_nodes_to_consider]
+            x_pred_edge = np.zeros(
+                (eval_args.batch_size, max_num_node, num_nodes_to_consider), dtype=np.int32)
+
+            node_level_input = torch.zeros(
+                eval_args.batch_size, 1, feature_len, device=eval_args.device)
+            # Initialize to node level start token
+            node_level_input[:, 0, len_node_vec - 2] = 1
+            past=None
+            for i in range(max_num_node):
+                # [batch_size] * [1] * [hidden_size_node_level_rnn]
+                node_level_input = self.node_project(node_level_input)
+                node_level_output,past = model.node_level_transformer(node_level_input, past)
+                # [batch_size] * [1] * [node_feature_len]
+                node_level_pred = model.output_node(node_level_output)
+                # [batch_size] * [node_feature_len] for torch.multinomial
+                node_level_pred = node_level_pred.reshape(
+                    eval_args.batch_size, len_node_vec)
+                # [batch_size]: Sampling index to set 1 in next node_level_input and x_pred_node
+                # Add a small probability for each node label to avoid zeros
+                node_level_pred[:, :-2] += EPS
+                # Start token should not be sampled. So set it's probability to 0
+                node_level_pred[:, -2] = 0
+                # End token should not be sampled if i less than min_num_node
+                if i < eval_args.min_num_node:
+                    node_level_pred[:, -1] = 0
+                sample_node_level_output = torch.multinomial(
+                    node_level_pred, 1).reshape(-1)
+                node_level_input = torch.zeros(
+                    eval_args.batch_size, 1, feature_len, device=eval_args.device)
+                node_level_input[torch.arange(
+                    eval_args.batch_size), 0, sample_node_level_output] = 1
+
+                # [batch_size] * [num of nodes]
+                x_pred_node[:, i] = sample_node_level_output.cpu().data
+
+                # [batch_size] * [1] * [hidden_size_edge_level_rnn]
+                hidden_edge = model.embedding_node_to_edge(node_level_output)
+
+                hidden_edge_rem_layers = torch.zeros(
+                    train_args.num_layers -
+                    1, eval_args.batch_size, hidden_edge.size(2),
+                    device=eval_args.device)
+                # [num_layers] * [batch_size] * [hidden_len]
+                # model['edge_level_rnn'].hidden = torch.cat(
+                #     (hidden_edge.permute(1, 0, 2), hidden_edge_rem_layers), dim=0)
+
+                # [batch_size] * [1] * [edge_feature_len]
+                edge_level_input = torch.zeros(
+                    eval_args.batch_size, 1, len_edge_vec, device=eval_args.device)
+                # Initialize to edge level start token
+                edge_level_input[:, 0, len_edge_vec - 2] = 1
+                for j in range(min(num_nodes_to_consider, i)):
+                    # [batch_size] * [1] * [edge_feature_len]
+                    edge_level_input = self.edge_project(edge_level_input)
+                    edge_level_output = model.edge_level_rnn(edge_level_input)
+                    # [batch_size] * [edge_feature_len] needed for torch.multinomial
+                    edge_level_output = edge_level_output.reshape(
+                        eval_args.batch_size, len_edge_vec)
+
+                    # [batch_size]: Sampling index to set 1 in next edge_level input and x_pred_edge
+                    # Add a small probability for no edge to avoid zeros
+                    edge_level_output[:, -3] += EPS
+                    # Start token and end should not be sampled. So set it's probability to 0
+                    edge_level_output[:, -2:] = 0
+                    sample_edge_level_output = torch.multinomial(
+                        edge_level_output, 1).reshape(-1)
+                    edge_level_input = torch.zeros(
+                        eval_args.batch_size, 1, len_edge_vec, device=eval_args.device)
+                    edge_level_input[:, 0, sample_edge_level_output] = 1
+
+                    # Setting edge feature for next node_level_input
+                    node_level_input[:, 0, len_node_vec + j * len_edge_vec: len_node_vec + (j + 1) * len_edge_vec] = \
+                        edge_level_input[:, 0, :]
+
+                    # [batch_size] * [num of nodes] * [num_nodes_to_consider]
+                    x_pred_edge[:, i, j] = sample_edge_level_output.cpu().data
+
+            # Save the batch of graphs
+            for k in range(eval_args.batch_size):
+                G = nx.Graph()
+
+                for v in range(max_num_node):
+                    # End node token
+                    if x_pred_node[k, v] == len_node_vec - 1:
+                        break
+                    elif x_pred_node[k, v] < len(feature_map['node_forward']):
+                        G.add_node(
+                            v, label=feature_map['node_backward'][x_pred_node[k, v]])
+                    else:
+                        print('Error in sampling node features')
+                        exit()
+
+                for u in range(len(G.nodes())):
+                    for p in range(min(num_nodes_to_consider, u)):
+                        if x_pred_edge[k, u, p] < len(feature_map['edge_forward']):
+                            if train_args.max_prev_node is not None:
+                                v = u - p - 1
+                            elif train_args.max_head_and_tail is not None:
+                                if p < train_args.max_head_and_tail[1]:
+                                    v = u - p - 1
+                                else:
+                                    v = p - train_args.max_head_and_tail[1]
+
+                            G.add_edge(
+                                u, v, label=feature_map['edge_backward'][x_pred_edge[k, u, p]])
+                        elif x_pred_edge[k, u, p] == len(feature_map['edge_forward']):
+                            # No edge
+                            pass
+                        else:
+                            print('Error in sampling edge features')
+                            exit()
+
+                # Take maximum connected component
+                if len(G.nodes()):
+                    max_comp = max(nx.connected_components(G), key=len)
+                    G = nx.Graph(G.subgraph(max_comp))
+
+                graphs.append(G)
+
+        return graphs
 
 
 
