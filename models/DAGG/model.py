@@ -7,6 +7,7 @@ from models.layers import RNN, MLP_Plain, MLP_Softmax
 from models.DAGG.helper import get_attributes_len_for_graph_rnn
 import numpy as np
 import networkx as nx
+from models.DAGG.att_decoder import AttentionDecoder
 EPS = 1e-9
 
 
@@ -252,11 +253,13 @@ EPS = 1e-9
 #         return torch.tensor(adj, device=self.args.device)
 
 class DAGG(nn.Module):
-    def __init__(self, args, node_level_transformer, edge_level_transformer, feature_map, processor):
+    def __init__(self, args, embedding_size_node_level_transformer, embedding_size_edge_level_transformer, feature_map, processor):
         super().__init__()
         self.args = args
-        self.node_level_transformer = node_level_transformer
-        self.edge_level_transformer= edge_level_transformer
+
+
+        self.node_level_transformer = AttentionDecoder(embedding_size_node_level_transformer, n_head=4)
+        self.edge_level_transformer= AttentionDecoder(embedding_size_edge_level_transformer, n_head=4)
         self.feature_map = feature_map
         self.embedding_node_to_edge = MLP_Plain(
             input_size=args.hidden_size_node_level_transformer, embedding_size=args.embedding_size_node_level_transformer,

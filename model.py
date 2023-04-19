@@ -22,13 +22,10 @@ def create_generative_model(args, feature_map):
 
     if args.note == 'DAGG':
 
-
-        node_level_transformer = AttentionDecoder(args.embedding_size_node_level_transformer, n_head=4)
-        edge_level_transformer = AttentionDecoder(args.embedding_size_edge_level_transformer, n_head=4)
         processor = Graph_to_att_Matrix(args, feature_map)
         args.feature_len = processor.feature_len
 
-        dagg =  DAGG(args, node_level_transformer, edge_level_transformer, feature_map, processor)
+        dagg =  DAGG(args, args.embedding_size_node_level_transformer, args.embedding_size_edge_level_transformer, feature_map, processor)
 
 
     return dagg
@@ -56,7 +53,7 @@ def create_inference_model(args, feature_map):
                  args=args,
                  featuremap=feature_map,
                  #model,
-                 gcn=gcn,
+                 gcn_type=args.gcn_type,
                  n_encode_layers=2,
                  tanh_clipping=10.,
                  mask_inner=True,

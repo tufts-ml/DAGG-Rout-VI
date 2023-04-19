@@ -7,6 +7,9 @@ from torch_geometric.utils import (get_laplacian, to_scipy_sparse_matrix)
 from scipy.sparse.linalg import eigs, eigsh
 import numpy as np
 from torch.nn import DataParallel
+from models.gcn.net.appnp_net_node import APPNET
+from models.gcn.net.gat_net_node import GATNet
+from models.gcn.net.gcn_net_node import GCNNet
 
 
 
@@ -50,7 +53,7 @@ class AttentionModel(nn.Module):
                  args,
                  featuremap,
                  #model,
-                 gcn,
+                 gcn_type,
                  n_encode_layers=2,
                  tanh_clipping=10.,
                  mask_inner=True,
@@ -74,7 +77,12 @@ class AttentionModel(nn.Module):
         self.args=args
         self.featrue_map=featuremap
         #self.model=model
-        self.gcn=gcn
+        if gcn_type == 'gcn':
+            self.gcn = GCNNet(args, 5, out_dim=32).to(args.device)
+        elif gcn_type == 'gat':
+            self.gcn = GATNet(args, 5, out_dim=32).to(args.device)
+        elif gcn_type == 'appnp':
+            self.gcn = APPNET(args, 5, out_dim=32).to(args.device)
 
         self.tanh_clipping = tanh_clipping
 
