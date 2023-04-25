@@ -41,9 +41,7 @@ class AttentionModelFixed(NamedTuple):
         )
 
 
-# TODO: class name should be Rout
-# TODO: wrap the forward function into a sampling function  
- 
+
 class AttentionModel(nn.Module):
 
     def __init__(self,

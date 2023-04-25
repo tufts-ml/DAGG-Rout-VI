@@ -4,7 +4,7 @@ from models.gcn.net.gat_net_node import GATNet
 from models.gcn.net.gcn_net_node import GCNNet
 from models.DAGG.att_decoder import AttentionDecoder
 from models.DAGG.model import DAGG
-from models.DAGG.data import Graph_to_att_Matrix
+from models.DAGG.data import Graph_to_Adj_Matrix
 from models.DAGG.attention import AttentionDecoder
 
 
@@ -22,10 +22,10 @@ def create_generative_model(args, feature_map):
 
     if args.note == 'DAGG':
 
-        processor = Graph_to_att_Matrix(args, feature_map)
+        processor = Graph_to_Adj_Matrix(args, feature_map)
         args.feature_len = processor.feature_len
 
-        dagg =  DAGG(args, args.embedding_size_node_level_transformer, args.embedding_size_edge_level_transformer, feature_map, processor)
+        dagg =  DAGG(args, feature_map, processor)
 
 
     return dagg

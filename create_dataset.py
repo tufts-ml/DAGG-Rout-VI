@@ -1,3 +1,5 @@
+import time
+import random
 import pickle
 import torch
 from torch.utils.data import Dataset
@@ -6,6 +8,9 @@ import os
 import numpy as np
 import networkx as nx
 import pandas as pd
+from torch.utils.data import DataLoader
+from datasets.process_dataset import create_graphs
+from datasets.preprocess import calc_max_prev_node
 
 class Graph_from_file(Dataset):
     # TODO implement dataset
@@ -24,7 +29,7 @@ class Graph_from_file(Dataset):
             G = pickle.load(f)
         f.close()
 
-        # TODO: prepare the data format required by gcn
+
         dgl_G = dgl.from_networkx(nx_graph=G)
 
 
@@ -229,20 +234,62 @@ class NumpyTupleDataset(Dataset):
         return node_array, adj
 
 
-# if __name__ == '__main__':
-#     from datasets.Qm9.transform_qm9 import transform_fn as transform_qm9
-#
-#     ntd = NumpyTupleDataset.load('../datasets/Qm9/graphs/qm9_relgcn_kekulized_ggnp.npz')
-    # ntd.set_batch_size(64)
-    #
-    # # for i in range(100, 20000):
-    # node, adj, _ = ntd[1001]
-    # g = NumpyTupleDataset.np_to_nx(node,adj)
-    # import networkx as nx
-    # node_1, adj_1 = NumpyTupleDataset.nx_to_np(g, 9, 4)
-    #
-    # e = np.all(np.equal(node, node_1))
-    # n = np.all(np.equal(adj, adj_1))
-    # if not (e and n):
-    #     print(e,n)
 
+
+def create_dataset(args):
+    # graphs = create_graphs(args)[:100] # for implementation test
+    graphs = create_graphs(args)
+
+    # Loading the feature map
+    with open(args.current_processed_dataset_path + 'map.dict', 'rb') as f:
+        feature_map = pickle.load(f)
+
+    print('Max number of nodes: {}'.format(feature_map['max_nodes']))
+    print('Max number of edges: {}'.format(feature_map['max_edges']))
+    print('Min number of nodes: {}'.format(feature_map['min_nodes']))
+    print('Min number of edges: {}'.format(feature_map['min_edges']))
+    print('Max degree of a node: {}'.format(feature_map['max_degree']))
+    print('No. of node labels: {}'.format(len(feature_map['node_forward'])))
+    print('No. of edge labels: {}'.format(len(feature_map['edge_forward'])))
+    print(args.__dict__)
+
+    if args.note == 'DAGG':
+        start = time.time()
+        if args.nobfs:
+            args.max_prev_node = feature_map['max_nodes'] - 1
+        if args.max_prev_node is None:
+            args.max_prev_node = calc_max_prev_node(args.current_processed_dataset_path)
+
+        args.max_head_and_tail = None
+        print('max_prev_node:', args.max_prev_node)
+
+        end = time.time()
+        print('Time taken to calculate max_prev_node = {:.3f}s'.format(
+            end - start))
+
+    random.shuffle(graphs)
+    graphs_train = graphs[: int(0.80 * len(graphs))]
+    graphs_validate = graphs[int(0.80 * len(graphs)): int(0.90 * len(graphs))]
+    # show graphs statistics
+    print('Model:', args.note)
+    print('Device:', args.device)
+    print('Graph type:', args.graph_type)
+    print('Training set: {}, Validation set: {}'.format(
+        len(graphs_train), len(graphs_validate)))
+
+    if args.graph_type in ['zinc', 'qm9']:
+        dataset = NumpyTupleDataset.load(args.current_dataset_path, graphs, feature_map)
+        dataset_train = torch.utils.data.Subset(dataset, graphs_train)  # 120,803
+        dataset_validate = torch.utils.data.Subset(dataset, graphs_validate)
+    else:
+
+        dataset_train = Graph_from_file(args, graphs_train, feature_map)
+        dataset_validate = Graph_from_file(args, graphs_validate, feature_map)
+
+    dataloader_train = DataLoader(
+        dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
+        num_workers=args.num_workers, collate_fn=NumpyTupleDataset.collate_batch)
+    dataloader_validate = DataLoader(
+        dataset_validate, batch_size=args.batch_size, shuffle=False, drop_last=True,
+        num_workers=args.num_workers, collate_fn=NumpyTupleDataset.collate_batch)
+    return dataloader_train, dataloader_validate, feature_map

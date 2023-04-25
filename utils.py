@@ -219,14 +219,5 @@ def nauty_to_nx(na_G):
     raise NotImplementedError
     # pass
 
-# if __name__ == '__main__':
-#     import pynauty as pnt
-#     import networkx as nx
-#     g = nx.complete_graph(5)
-#     na_g = nx_to_nauty(g)
-#     print(pnt.autgrp(na_g))
-#     g = nx.star_graph(4)
-#     na_g = nx_to_nauty(g)
-#     print(pnt.autgrp(na_g))
 
 

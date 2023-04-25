@@ -15,7 +15,7 @@ from utils import save_model, load_model, get_model_attribute, get_last_checkpoi
 
 
 # remove the epoch argument from the argument, and move the print clause out 
-def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_history, feature_map,epoch):
+def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_history,epoch):
 
     Rout.train()
     DAGG.train()
@@ -28,7 +28,7 @@ def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_his
         st = time.time()
 
 
-        elbo = train_batch(args, DAGG, Rout, optimizer,graphs[0]['dG'].to(args.device), graphs[0]['G'],feature_map)
+        elbo = train_batch(args, DAGG, Rout, optimizer,graphs[0]['dG'].to(args.device))
         total_loss = total_loss + elbo
 
         spent = time.time() - st
@@ -49,7 +49,7 @@ def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_his
 
 
 
-def train_batch(args, DAGG, Rout,optimizer, dg, nx_g, embedding):
+def train_batch(args, DAGG, Rout,optimizer, dg):
 
     # Evaluate model, get costs and log probabilities
     pi_log_likelihood, pis = Rout(dg, args.sample_size, return_pi=True)
@@ -58,7 +58,7 @@ def train_batch(args, DAGG, Rout,optimizer, dg, nx_g, embedding):
 
 
 
-    log_joint = -DAGG(nx_g, pis)
+    log_joint = -DAGG(dg, pis)
 
     # Reinforce: [log p(G,\pi|z)  - log q(\pi|G)] * dlog q(\pi|G)
     fake_nll_q = -torch.mean(torch.mean((log_joint.detach() - pi_log_likelihood.detach()) * pi_log_likelihood))
@@ -117,7 +117,7 @@ def test(args, DAGG, Rout, dataloader_validate, feature_map):
 
 # Main training function
 
-def train(args, DAGG, Rout,feature_map, dataloader_train):
+def train(args, DAGG, Rout,feature_map, dataloader_train, dataloader_valid):
 
     optimizer = optim.Adam([DAGG.parameters(), Rout.parameters()], lr=args.lr)
     scheduler = MultiStepLR(optimizer, milestones=args.milestones,gamma=args.gamma)

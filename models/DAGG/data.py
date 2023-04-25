@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 import networkx as nx
 from datasets.preprocess import get_bfs_seq
 from models.DAGG.helper import graph_to_matrix, get_attributes_len_for_graph_rnn
+import dgl
 
 
 class Graph_Adj_Matrix_from_file(Dataset):
@@ -127,6 +128,8 @@ class Graph_to_Adj_Matrix:
 
     def __call__(self, graph, perm=None):
         # TODO given a graph and permutation, return an adj matrix, i.e., reimplement Graph_Adj_Matrix_from_file.__getitem__
+        graph = dgl.to_networkx(graph, node_attrs=['feat'])
+
         x_item = torch.zeros((self.max_nodes, self.feature_len))
         adj_feature_mat = self.graph_to_matrix(graph, self.feature_map['node_forward'], self.feature_map['edge_forward'], perm)
         x_item[0:adj_feature_mat.shape[0], :adj_feature_mat.shape[1]] = adj_feature_mat
