@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.utils.data._utils.collate import default_collate as collate
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from models.DAGG.helper import get_attributes_len_for_graph_rnn
+from models.DAGG.data import Graph_to_Adj_Matrix
 import numpy as np
 import networkx as nx
 from models.DAGG.att_decoder import AttentionDecoder
@@ -74,6 +75,8 @@ class DAGG(nn.Module):
     def __init__(self, args, feature_map, processor):
         super().__init__()
         self.args = args
+        self.processor = Graph_to_Adj_Matrix(args, feature_map)
+        args.feature_len = processor.feature_len
 
 
         self.node_level_transformer = AttentionDecoder(args.embedding_size_node_level_transformer, n_head=4)
@@ -91,8 +94,6 @@ class DAGG(nn.Module):
         feature_len = len_node_vec + num_nodes_to_consider * len_edge_vec
         self.node_project =  MLP_Plain(feature_len, args.embedding_size_node_level_transformer, args.embedding_size_node_level_transformer)
         self.edge_project =  MLP_Plain(len_edge_vec, args.embedding_size_edge_level_transformer, args.embedding_size_edge_level_transformer)
-
-        self.processor = processor
 
 
     # probability calculation
@@ -134,13 +135,12 @@ class DAGG(nn.Module):
         steps = x.size(1)
 
         x_len = x_len.cpu()
-        #mask
-        mask = torch.tril(torch.ones((batch_size, steps+1, steps+1)))
+        # #mask
+        # mask = torch.tril(torch.ones((batch_size, steps+1, steps+1)))
 
         # Forward propogation
         node_level_input = self.node_project(node_level_input)
-        node_level_output = self.node_level_transformer(
-            node_level_input, attention_mask=mask)
+        node_level_output = self.node_level_transformer(node_level_input)
 
         # Evaluating node predictions
         x_pred_node = self.output_node(node_level_output)
@@ -176,19 +176,17 @@ class DAGG(nn.Module):
 
         x_edge_len = torch.LongTensor(x_edge_len).to(self.args.device)
 
-        # Get edge-level RNN hidden state from node-level RNN output at each timestamp
-        # Ignore the last hidden state corresponding to END
+
         hidden_edge = self.embedding_node_to_edge(node_level_output[:, 0:-1, :])
 
-        # Prepare hidden state for edge level RNN similiar to edge_mat
-        # Ignoring the last graph level decoder END token output (all 0's)
+
         hidden_edge = pack_padded_sequence(
             hidden_edge, x_len, batch_first=True).data
         idx = torch.LongTensor(
             [i for i in range(hidden_edge.size(0) - 1, -1, -1)]).to(self.args.device)
         hidden_edge = hidden_edge.index_select(0, idx)
 
-        # Set hidden state for edge-level RNN
+        # Set hidden state for edge-level Transformer
         # shape of hidden tensor (num_layers, batch_size, hidden_size)
         hidden_edge = hidden_edge.view(hidden_edge.size(0), 1, hidden_edge.size(1))
         edge_level_input = self.edge_project(edge_level_input)
@@ -196,7 +194,7 @@ class DAGG(nn.Module):
 
 
 
-        x_pred_edge = self.edge_level_rnn(edge_level_input, attention_mask=mask)[:,1:]
+        x_pred_edge = self.edge_level_transformer(edge_level_input)[:,1:]
         # cleaning the padding i.e setting it to zero
         x_pred_node = pack_padded_sequence(
             x_pred_node, x_len + 1, batch_first=True)
@@ -257,10 +255,7 @@ class DAGG(nn.Module):
         graphs = []
 
         for _ in range(eval_args.count // eval_args.batch_size):
-            # model['node_level_rnn'].hidden = model['node_level_rnn'].init_hidden(
-            #     batch_size=eval_args.batch_size)
 
-            # [batch_size] * [num of nodes]
             x_pred_node = np.zeros(
                 (eval_args.batch_size, max_num_node), dtype=np.int32)
             # [batch_size] * [num of nodes] * [num_nodes_to_consider]
@@ -318,7 +313,7 @@ class DAGG(nn.Module):
                 for j in range(min(num_nodes_to_consider, i)):
                     # [batch_size] * [1] * [edge_feature_len]
                     edge_level_input = self.edge_project(edge_level_input)
-                    edge_level_output = model.edge_level_rnn(edge_level_input)
+                    edge_level_output = model.edge_level_transformer(edge_level_input)
                     # [batch_size] * [edge_feature_len] needed for torch.multinomial
                     edge_level_output = edge_level_output.reshape(
                         eval_args.batch_size, len_edge_vec)

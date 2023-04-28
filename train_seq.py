@@ -60,10 +60,10 @@ def train_batch(args, DAGG, Rout,optimizer, dg):
 
     log_joint = -DAGG(dg, pis)
 
-    # Reinforce: [log p(G,\pi|z)  - log q(\pi|G)] * dlog q(\pi|G)
+
     fake_nll_q = -torch.mean(torch.mean((log_joint.detach() - pi_log_likelihood.detach()) * pi_log_likelihood))
 
-    # elbo(G, z|pi) = log p(G,\pi|z) - kl [q(z|G,\pi)||q(z)]
+
     nll_p = -torch.mean(log_joint)
 
     loss = fake_nll_q + nll_p
@@ -89,8 +89,8 @@ def train_batch(args, DAGG, Rout,optimizer, dg):
     return elbo.item()
 
 
-# TODO: suggested function name: test  
-def test(args, DAGG, Rout, dataloader_validate, feature_map):
+
+def test(args, DAGG, Rout, dataloader_validate):
 
     DAGG.eval()
     Rout.eval()
@@ -98,21 +98,21 @@ def test(args, DAGG, Rout, dataloader_validate, feature_map):
     batch_count = len(dataloader_validate)
     with torch.no_grad():
         total_elbo = 0.0
-        ll_qs = 0.0
+
         for _, graphs in enumerate(dataloader_validate):
 
             log_likelihood, pis = Rout(graphs['dG'][0], args.sample_size, return_pi=True)
 
 
 
-            log_joint = -DAGG(graphs['G'][0], pis)
+            log_joint = -DAGG(graphs['dG'][0], pis)
             elbo = -torch.mean(log_joint.detach() - log_likelihood.detach())
             total_elbo = total_elbo + elbo
 
 
 
 
-    return total_elbo / batch_count, ll_qs / batch_count
+    return total_elbo / batch_count
 
 
 # Main training function
@@ -151,9 +151,6 @@ def train(args, DAGG, Rout,feature_map, dataloader_train, dataloader_valid):
 
         log_history['train_elbo'].append(loss)
 
-        #log_history['valid_elbo'].append(loss_validate)
-
-        # save logging history
         df_iter = pd.DataFrame()
         df_epoch = pd.DataFrame()
         df_iter['batch_elbo'] = log_history['batch_elbo']

@@ -67,19 +67,7 @@ class NumpyTupleDataset(Dataset):
         """
 
     def __init__(self, datasets, graph_list, feature_map, property):
-        # Load dataset
-        # if not os.path.exists(filepath):
-        #     raise ValueError('Invalid filepath for dataset')
-        # load_data = np.load(filepath)
-        # datasets = []
-        # i = 0
-        # while True:
-        #     key = 'arr_{}'.format(i)
-        #     if key in load_data.keys():
-        #         datasets.append(load_data[key]) # [(133885, 9), (133885,4,9,9), (133885, 15)]
-        #         i += 1
-        #     else:
-        #         break
+
         if not datasets:
             raise ValueError('no datasets are given')
         if not graph_list:

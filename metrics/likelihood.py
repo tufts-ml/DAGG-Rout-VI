@@ -2,19 +2,13 @@ import numpy as np
 import networkx
 import pickle
 from utils import load_model, get_model_attribute
-from models.graph_rnn.model import create_model as creat_grnn
-from models.dgmg.model import create_model as creat_dgmg
-from models.graph_rnn.data import Graph_to_Adj_Matrix, Graph_Adj_Matrix
-from models.dgmg.data import Graph_to_Action
 import torch
 from torch.utils.data._utils.collate import default_collate as collate
-from models.graph_rnn.train import evaluate_loss as eval_loss_graph_rnn
-from models.dgmg.train import evaluate_loss as eval_loss_dgmg
 from models.gcn.helper import mp_sampler
 
 
 
-def model_likelihood(graphs_indices, graphs_path, sample_size, eval_args):
+def model_likelihood(model, graphs_indices, graphs_path, sample_size, eval_args):
     graphs=[]
     fact_nodes_number=[]
     #load test graphs
@@ -31,14 +25,6 @@ def model_likelihood(graphs_indices, graphs_path, sample_size, eval_args):
     train_args.device = eval_args.device
     feature_map = get_model_attribute(
         'feature_map', eval_args.model_path, eval_args.device)
-    if train_args.note == 'GraphRNN':
-        model = creat_grnn(train_args, feature_map)
-        processor = Graph_to_Adj_Matrix(train_args, feature_map, random_bfs= False)
-        eval_loss = eval_loss_graph_rnn
-    if train_args.note == 'DGMG':
-        model =  creat_dgmg(train_args, feature_map)
-        processor = Graph_to_Action(train_args, feature_map)
-        eval_loss = eval_loss_dgmg
 
 
 
@@ -88,56 +74,6 @@ def _statistic(llg, l_rep):
     return np.array(torch.exp(mtllg))
 
 
-if __name__ == '__main__':
-    class ArgsEvaluate():
-        def __init__(self, name, epoch):
-            # Can manually select the device too
-            '''
-
-            :param name: str, output dir for a certain exp
-            :param epoch: int, epoch to evaluate
-            '''
-
-            self.device = torch.device(
-                'cuda:0' if torch.cuda.is_available() else 'cpu')
-
-            self.model_path = 'output/' + name + '/model_save' + "/epoch_" + str(epoch) + ".dat"
-
-            self.train_args = get_model_attribute(
-                'saved_args', self.model_path, self.device)
-
-            self.num_epochs = get_model_attribute(
-                'epoch', self.model_path, self.device)
-
-            # Whether to generate networkx format graphs for real datasets
-            self.generate_graphs = True
-
-            # Number of graphs to produce from the model
-            self.count = 50
-            self.batch_size = 25  # Must be a factor of count
-
-            self.metric_eval_batch_size = 256
-
-            # Specific to GraphRNN
-            self.min_num_node = 0
-            self.max_num_node = 50
-
-            # Set for Likelihood
-            self.need_llh = True
-            self.llh_sample = 1000  # number of sample to estimate true likelihood
-            self.test_number = 1  # number of test graphs to be estimated for likelihood
-
-            self.graphs_save_path = 'output/' + name + '/generated_graphs/'
-            self.current_graphs_save_path = self.graphs_save_path
-
-            # self.current_graphs_save_path = self.graphs_save_path + self.train_args.fname + '_' + \
-            #     self.train_args.time + '/' + str(self.num_epochs) + '/'
-
-    eval_args = ArgsEvaluate(name='attGen-noZ_ENZYMES_gat_nobfs_2021_07_03_19_10_32', epoch=80)
-    train_args = eval_args.train_args
-    graph_path = 'datasets/Lung/graphs/'
-    graphs_indices = [1,2]
-    model_likelihood(graphs_indices, graph_path, sample_size=20, eval_args=eval_args)
 
 
 

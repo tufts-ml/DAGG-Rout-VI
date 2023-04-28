@@ -42,7 +42,7 @@ class AttentionModelFixed(NamedTuple):
 
 
 
-class AttentionModel(nn.Module):
+class Rout(nn.Module):
 
     def __init__(self,
                  embedding_dim,
@@ -151,11 +151,10 @@ class AttentionModel(nn.Module):
         pe *= sign
         return pe.to(edge_index.device)
 
-    # TODO: input contains node orders, should use name: batch_order
-    # TODO: the second argument should be a graph
+
     def forward(self,g, batch_size, return_pi=True):
         """
-        :param input: (batch_size, graph_size, node_dim) input node features or dictionary with multiple tensors
+        :param input: g: dgl graph
         :param return_pi: whether to return the output sequences, this is optional as it is not compatible with
         using DataParallel as the results may be of different lengths on different GPUs
         :return:
@@ -169,7 +168,6 @@ class AttentionModel(nn.Module):
         edge_index = torch.stack(edges)
         _log_p, pi = self._inner(embeddings, edge_index)
 
-        #cost, mask = self.problem.get_costs(nx_g, pi, self.model, self.args, self.feature_map)
 
 
         mask = None

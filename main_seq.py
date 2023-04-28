@@ -2,7 +2,9 @@ import random
 import os, json
 from args import Args
 from utils import create_dirs
-from model import create_generative_model, create_inference_model
+from models.DAGG.model import DAGG
+from models.Rout.attention_model import Rout
+from models.Rout.generation import generation
 from create_dataset import create_dataset
 from train_seq import train
 
@@ -25,8 +27,20 @@ if __name__ == '__main__':
 
 
 
-    DAGG = create_generative_model(args, feature_map)
-    Rout = create_inference_model(args, feature_map)
+    DAGG = DAGG(args, feature_map)
+    Rout = Rout(embedding_dim = args.gcn_out_dim,
+                 hidden_dim=32,
+                 state=generation,
+                 args=args,
+                 featuremap=feature_map,
+                 gcn_type=args.gcn_type,
+                 n_encode_layers=2,
+                 tanh_clipping=10.,
+                 mask_inner=True,
+                 mask_logits=True,
+                 n_heads=8,
+                 checkpoint_encoder=False,
+                 shrink_size=None).to(args.device)
 
      
     train(args, DAGG, Rout, dataloader_train, dataloader_validate)

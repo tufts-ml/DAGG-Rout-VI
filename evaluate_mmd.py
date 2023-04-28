@@ -5,14 +5,9 @@ from statistics import mean
 import torch
 import numpy as np
 import pandas as pd
-
-
-from models.graph_rnn.train import predict_graphs as gen_graphs_graph_rnn
-from models.gran.model import predict_graphs as gen_graphs_gran
-from models.graph_decoder.predict import predict_graphs
 from utils import get_model_attribute, load_graphs, save_graphs, get_last_checkpoint
-
-import metrics.stats
+from models.DAGG.model import DAGG
+import metrics.mmd.stats
 
 LINE_BREAK = '----------------------------------------------------------------------\n'
 
@@ -66,8 +61,6 @@ class ArgsEvaluate():
         self.current_graphs_save_path = self.graphs_save_path
 
 
-        # self.current_graphs_save_path = self.graphs_save_path + self.train_args.fname + '_' + \
-        #     self.train_args.time + '/' + str(self.num_epochs) + '/'
 
 
 def patch_graph(graph):
@@ -80,21 +73,10 @@ def patch_graph(graph):
     return graph
 
 
-def generate_graphs(eval_args):
-    """
-    Generate graphs (networkx format) given a trained generative model
-    and save them to a directory
-    :param eval_args: ArgsEvaluate object
-    """
+def generate_graphs(eval_args, DAGG):
+
     train_args = eval_args.train_args
-
-    if train_args.note == 'GraphRNN':
-        gen_graphs = gen_graphs_graph_rnn(eval_args)
-
-    elif train_args.note == 'attGen-noZ':
-        gen_graphs = predict_graphs(eval_args)
-    elif train_args.note == 'GRAN':
-        gen_graphs = gen_graphs_gran(eval_args)
+    graphs = DAGG.sample(eval_args)
 
 
     if os.path.isdir(eval_args.current_graphs_save_path):
@@ -102,7 +84,7 @@ def generate_graphs(eval_args):
 
     os.makedirs(eval_args.current_graphs_save_path)
 
-    save_graphs(eval_args.current_graphs_save_path, gen_graphs)
+    save_graphs(eval_args.current_graphs_save_path, graphs)
 
 
 def print_stats(
@@ -131,9 +113,7 @@ def print_stats(
 def save_stats(
     node_count_avg_ref, node_count_avg_pred, edge_count_avg_ref,
     edge_count_avg_pred, degree_mmd, clustering_mmd, orbit_mmd,
-    nspdk_mmd, node_label_mmd, edge_label_mmd, node_label_and_degree,
-    uni, nove, eval_args
-):
+    nspdk_mmd, node_label_mmd, edge_label_mmd, node_label_and_degree, eval_args):
     stats = {}
     stats['Node count avg Test'] = np.array([mean(node_count_avg_ref)])
     stats['Node count avg Generated'] = np.array([mean(node_count_avg_pred)])
@@ -149,19 +129,14 @@ def save_stats(
     stats['MMD Node label'] = np.array([mean(node_label_mmd)])
     stats['MMD Edge label'] = np.array([mean(edge_label_mmd)])
     stats['MMD Joint Node label and degree'] = np.array([mean(node_label_and_degree)])
-
-    stats['novelity'] = np.array([nove])
-    stats['uniqueness'] = np.array([uni])
     print(stats)
     hist = pd.DataFrame.from_dict(stats)
     hist.to_csv('output/'+ eval_args.train_args.fname+ '/stats.csv')
-#
-# MMD Degree - 0.501989, MMD Clustering - 0.236976, MMD Orbits - 0.233946
-# MMD NSPDK - 0.193140
+
 if __name__ == "__main__":
 
 
-    eval_args = ArgsEvaluate(name='attGen-noZ_ENZYMES_gat_nobfs_2021_07_03_19_10_32', epoch=83)
+    eval_args = ArgsEvaluate(name='', epoch=83)
 
 
     train_args = eval_args.train_args
@@ -169,8 +144,10 @@ if __name__ == "__main__":
     print('Evaluating {}, run at {}, epoch {}'.format(
         train_args.fname, train_args.time, eval_args.num_epochs))
 
+    DAGG = DAGG(train_args, feature_map)
+
     if eval_args.generate_graphs:
-        generate_graphs(eval_args)
+        generate_graphs(eval_args, DAGG)
 
     random.seed(123)
 
@@ -195,18 +172,7 @@ if __name__ == "__main__":
         train_args.fname, train_args.time, eval_args.num_epochs))
 
     print('Graphs generated - {}'.format(len(graphs_pred_indices)))
-    #
 
-    # novelity = metrics.stats.novelity(
-    #     train_args.current_dataset_path, graphs_train_indices, eval_args.current_graphs_save_path,
-    #     graphs_pred_indices, train_args.temp_path, timeout=60)
-    #
-    # uniqueness = metrics.stats.uniqueness(
-    #     eval_args.current_graphs_save_path,
-    #     graphs_pred_indices, train_args.temp_path, timeout=120)
-    novelity = 0
-    uniqueness = 0
-    # exit()
 
     node_count_avg_ref, node_count_avg_pred = [], []
     edge_count_avg_ref, edge_count_avg_pred = [], []
@@ -241,14 +207,6 @@ if __name__ == "__main__":
         orbit_mmd.append(metrics.stats.orbit_stats_all(
             graphs_ref, graphs_pred))
 
-        #nspdk_mmd.append(metrics.stats.nspdk_stats(graphs_ref, graphs_pred))
-
-        #node_label_mmd.append(
-            #metrics.stats.node_label_stats(graphs_ref, graphs_pred))
-        #edge_label_mmd.append(
-            #metrics.stats.edge_label_stats(graphs_ref, graphs_pred))
-        #node_label_and_degree.append(
-            #metrics.stats.node_label_and_degree_joint_stats(graphs_ref, graphs_pred))
 
         print('Running average of metrics:\n')
 
@@ -270,6 +228,5 @@ if __name__ == "__main__":
     save_stats(
         node_count_avg_ref, node_count_avg_pred, edge_count_avg_ref,
         edge_count_avg_pred, degree_mmd, clustering_mmd, orbit_mmd,
-        nspdk_mmd, node_label_mmd, edge_label_mmd, node_label_and_degree,
-        novelity, uniqueness, eval_args
+        nspdk_mmd, node_label_mmd, edge_label_mmd, node_label_and_degree, eval_args
     )

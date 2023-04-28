@@ -1,4 +1,3 @@
-from models.seq_attention.attention_model import AttentionModel, generation
 from models.gcn.net.appnp_net_node import APPNET
 from models.gcn.net.gat_net_node import GATNet
 from models.gcn.net.gcn_net_node import GCNNet
@@ -39,13 +38,7 @@ def create_inference_model(args, feature_map):
 
     len_node_vec = len(feature_map['node_forward'])
 
-    # q distribution q(pi | G)
-    if args.gcn_type == 'gcn':
-        gcn = GCNNet(args, 5, out_dim=32).to(args.device)
-    elif args.gcn_type == 'gat':
-        gcn = GATNet(args, 5, out_dim=32).to(args.device)
-    elif args.gcn_type == 'appnp':
-        gcn = APPNET(args, 5, out_dim=32).to(args.device)
+
 
     Rout = AttentionModel(embedding_dim = args.gcn_out_dim,
                  hidden_dim=32,
