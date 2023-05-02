@@ -2,7 +2,8 @@ import torch
 from torch import nn
 import math
 from typing import NamedTuple
-from models.seq_attention.sequtils import  compute_in_batches,CachedLookup,sample_many
+from generation import generation
+from models.Rout.sequtils import  compute_in_batches,CachedLookup,sample_many
 from torch_geometric.utils import (get_laplacian, to_scipy_sparse_matrix)
 from scipy.sparse.linalg import eigs, eigsh
 import numpy as np
@@ -13,57 +14,15 @@ from models.gcn.net.gcn_net_node import GCNNet
 
 
 
-def set_decode_type(model, decode_type):
-    if isinstance(model, DataParallel):
-        model = model.module
-    model.set_decode_type(decode_type)
-
-
-class AttentionModelFixed(NamedTuple):
-    """
-    Context for AttentionModel decoder that is fixed during decoding so can be precomputed/cached
-    This class allows for efficient indexing of multiple Tensors at once
-    """
-    node_embeddings: torch.Tensor
-    context_node_projected: torch.Tensor
-    glimpse_key: torch.Tensor
-    glimpse_val: torch.Tensor
-    logit_key: torch.Tensor
-
-    def __getitem__(self, key):
-        assert torch.is_tensor(key) or isinstance(key, slice)
-        return AttentionModelFixed(
-            node_embeddings=self.node_embeddings[key],
-            context_node_projected=self.context_node_projected[key],
-            glimpse_key=self.glimpse_key[:, key],  # dim 0 are the heads
-            glimpse_val=self.glimpse_val[:, key],  # dim 0 are the heads
-            logit_key=self.logit_key[key]
-        )
-
-
-
 class Rout(nn.Module):
 
-    def __init__(self,
-                 embedding_dim,
-                 hidden_dim,
-                 state,
-                 args,
-                 featuremap,
-                 #model,
-                 gcn_type,
-                 n_encode_layers=2,
-                 tanh_clipping=10.,
-                 mask_inner=True,
-                 mask_logits=True,
-                 n_heads=8,
-                 checkpoint_encoder=False,
-                 shrink_size=None):
+    def __init__(self, args, data_statistics):
+
         super(AttentionModel, self).__init__()
 
-        self.embedding_dim = embedding_dim
-        self.hidden_dim = hidden_dim
-        self.n_encode_layers = n_encode_layers
+        self.embedding_dim = args.gnn_out_dim
+        self.hidden_dim = args.gnn_hidden_dim
+        self.n_encode_layers = 2
         self.decode_type = None
         self.temp = 1.0
         self.allow_partial = False
@@ -71,37 +30,37 @@ class Rout(nn.Module):
         self.is_orienteering = False
         self.is_pctsp = False
         #sepcital for graph generation
-        self.gcn_type=args.gcn_type
+        self.gnn_type=args.gnn_type
         self.args=args
         self.featrue_map=featuremap
         #self.model=model
-        if gcn_type == 'gcn':
-            self.gcn = GCNNet(args, 5, out_dim=32).to(args.device)
-        elif gcn_type == 'gat':
-            self.gcn = GATNet(args, 5, out_dim=32).to(args.device)
-        elif gcn_type == 'appnp':
-            self.gcn = APPNET(args, 5, out_dim=32).to(args.device)
+        if self.gnn_type == 'gcn':
+            self.gnn = GCNNet(args, 5, out_dim=32).to(args.device)
+        elif self.gnn_type == 'gat':
+            self.gnn = GATNet(args, 5, out_dim=32).to(args.device)
+        elif self.gnn_type == 'appnp':
+            self.gnn = APPNET(args, 5, out_dim=32).to(args.device)
+        else: 
+            raise Exception("No such GNN type: " + str(self.gnn_type))
 
-        self.tanh_clipping = tanh_clipping
+        self.tanh_clipping = 10.
 
-        self.mask_inner = mask_inner
-        self.mask_logits = mask_logits
+        self.mask_inner = True 
+        self.mask_logits = True
 
-        self.state = state
-        self.n_heads = n_heads
-        self.checkpoint_encoder = checkpoint_encoder
-        self.shrink_size = shrink_size
+        self.state = generation 
+        self.n_heads = 8 
+        self.checkpoint_encoder = False 
+        self.shrink_size = None 
+
         #use sampling
         self.decode_type = "sampling"
 
         # Problem specific context parameters (placeholder and step context dimension)
-        embedding_dim = self.args.gcn_out_dim
             
-            # Learned input symbols for first action
-        self.W_placeholder = nn.Parameter(torch.Tensor(2 * embedding_dim))
+        # Learned input symbols for first action
+        self.W_placeholder = nn.Parameter(torch.Tensor(2 * self.embedding_dim))
         self.W_placeholder.data.uniform_(-1, 1)  # Placeholder should be in range of activations
-
-
 
         # self.embedder = GraphAttentionEncoder(
         #     n_heads=n_heads,
@@ -110,15 +69,42 @@ class Rout(nn.Module):
         #     normalization=normalization
         # )
 
+        # For each node we compute (glimpse key, glimpse value, logit key) so 3 * self.embedding_dim
+        self.project_node_embeddings = nn.Linear(self.embedding_dim, 3 * self.embedding_dim, bias=False)
+        self.project_fixed_context = nn.Linear(self.embedding_dim, self.embedding_dim, bias=False)
+        self.project_step_context = nn.Linear(2*self.embedding_dim, self.embedding_dim, bias=False)
+        #assert self.embedding_dim % n_heads == 0
+        # Note n_heads * val_dim == self.embedding_dim so input to project_out is self.embedding_dim
+        self.project_out = nn.Linear(self.embedding_dim, self.embedding_dim, bias=False)
 
 
-        # For each node we compute (glimpse key, glimpse value, logit key) so 3 * embedding_dim
-        self.project_node_embeddings = nn.Linear(embedding_dim, 3 * embedding_dim, bias=False)
-        self.project_fixed_context = nn.Linear(embedding_dim, embedding_dim, bias=False)
-        self.project_step_context = nn.Linear(2*embedding_dim, embedding_dim, bias=False)
-        #assert embedding_dim % n_heads == 0
-        # Note n_heads * val_dim == embedding_dim so input to project_out is embedding_dim
-        self.project_out = nn.Linear(embedding_dim, embedding_dim, bias=False)
+    def forward(self, g, n_samples):
+        """
+        This function samples `n_samples` of node orders from this q distribution and returns their log-likelihoods 
+
+        :param input: g: dgl graph
+        :param return_pi: whether to return the output sequences, this is optional as it is not compatible with
+        using DataParallel as the results may be of different lengths on different GPUs
+        :return:
+        """
+
+        embeddings = self.add_PE(g)
+        embeddings = self.gnn(g, embeddings)
+        embeddings = embeddings.repeat(n_samples, 1, 1)
+
+        edges = g.edges()
+        edge_index = torch.stack(edges)
+        _log_p, pi = self._inner(embeddings, edge_index)
+
+        mask = None
+        # Log likelyhood is calculated within the model since returning it per action does not work well with
+        # DataParallel since sequences can be of different lengths
+        ll = self._calc_log_likelihood(_log_p, pi, mask)
+
+        return pi, ll
+
+
+
 
     def set_decode_type(self, decode_type, temp=None):
         self.decode_type = decode_type
@@ -151,34 +137,6 @@ class Rout(nn.Module):
         pe *= sign
         return pe.to(edge_index.device)
 
-
-    def forward(self,g, batch_size, return_pi=True):
-        """
-        :param input: g: dgl graph
-        :param return_pi: whether to return the output sequences, this is optional as it is not compatible with
-        using DataParallel as the results may be of different lengths on different GPUs
-        :return:
-        """
-
-        embeddings = self.add_PE(g)
-        embeddings = self.gcn(g, embeddings)
-        embeddings = embeddings.repeat(batch_size, 1, 1)
-
-        edges = g.edges()
-        edge_index = torch.stack(edges)
-        _log_p, pi = self._inner(embeddings, edge_index)
-
-
-
-        mask = None
-        # Log likelyhood is calculated within the model since returning it per action does not work well with
-        # DataParallel since sequences can be of different lengths
-        ll = self._calc_log_likelihood(_log_p, pi, mask)
-        if return_pi:
-
-            return ll, pi
-        else:
-            return ll
 
 
 
@@ -549,3 +507,36 @@ class Rout(nn.Module):
             .expand(v.size(0), v.size(1) if num_steps is None else num_steps, v.size(2), self.n_heads, -1)
             .permute(3, 0, 1, 2, 4)  # (n_heads, batch_size, num_steps, graph_size, head_dim)
         )
+
+
+
+def set_decode_type(model, decode_type):
+    if isinstance(model, DataParallel):
+        model = model.module
+    model.set_decode_type(decode_type)
+
+
+class AttentionModelFixed(NamedTuple):
+    """
+    Context for AttentionModel decoder that is fixed during decoding so can be precomputed/cached
+    This class allows for efficient indexing of multiple Tensors at once
+    """
+    node_embeddings: torch.Tensor
+    context_node_projected: torch.Tensor
+    glimpse_key: torch.Tensor
+    glimpse_val: torch.Tensor
+    logit_key: torch.Tensor
+
+    def __getitem__(self, key):
+        assert torch.is_tensor(key) or isinstance(key, slice)
+        return AttentionModelFixed(
+            node_embeddings=self.node_embeddings[key],
+            context_node_projected=self.context_node_projected[key],
+            glimpse_key=self.glimpse_key[:, key],  # dim 0 are the heads
+            glimpse_val=self.glimpse_val[:, key],  # dim 0 are the heads
+            logit_key=self.logit_key[key]
+        )
+
+
+
+

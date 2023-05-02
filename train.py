@@ -15,85 +15,82 @@ from utils import save_model, load_model, get_model_attribute, get_last_checkpoi
 
 
 # remove the epoch argument from the argument, and move the print clause out 
-def train_epoch(args, DAGG, Rout, dataloader_train,optimizer, scheduler, log_history,epoch):
+def train_epoch(args, p_model, q_model, dataloader_train, optimizer, scheduler, log_history, epoch):
+    """
+    One training epoch 
+    """
 
-    Rout.train()
-    DAGG.train()
+    q_model.train()
+    p_model.train()
 
-    batch_count = len(dataloader_train)
+    train_size = len(dataloader_train)
     total_loss = 0.0
 
     for batch_id, graphs in enumerate(dataloader_train):
 
+        # currently this function can only train with batch size 1
+        # assert batch size is 1
+        assert(len(graphs) == 1)
+
         st = time.time()
 
-
-        elbo = train_batch(args, DAGG, Rout, optimizer,graphs[0]['dG'].to(args.device))
+        elbo = train_batch(args, p_model, q_model, optimizer, graphs[0]['dG'].to(args.device))
         total_loss = total_loss + elbo
 
         spent = time.time() - st
 
-        #  
         if batch_id % args.print_interval == 0:
             print('epoch {} batch {}: elbo is {}, time spent is {}.'.format(epoch, batch_id, elbo,spent), flush=True)
 
         log_history['batch_elbo'].append(elbo)
-
         log_history['batch_time'].append(spent)
 
         for _, sched in scheduler.items():
             sched.step()
 
-    return total_loss / batch_count
+    avg_loss = total_loss / train_size
+
+    return avg_loss
 
 
 
 
-def train_batch(args, DAGG, Rout,optimizer, dg):
-
+def train_batch(args, p_model, q_model,optimizer, graph):
+    """
+        compute the elbo and execute one gradient-descent step 
+    """
     # Evaluate model, get costs and log probabilities
-    pi_log_likelihood, pis = Rout(dg, args.sample_size, return_pi=True)
+    pis, pi_log_likelihood = q_model(graph, args.sample_size)
+    
+    # TODO: need to return log joint
+    log_joint = -p_model(graph, pis)
 
-
-
-
-
-    log_joint = -DAGG(dg, pis)
-
-
+    # for the gradient of q dist 
     fake_nll_q = -torch.mean(torch.mean((log_joint.detach() - pi_log_likelihood.detach()) * pi_log_likelihood))
 
-
+    # for the gradient of p model
     nll_p = -torch.mean(log_joint)
 
     loss = fake_nll_q + nll_p
 
     # Perform backward pass and optimization step
-
     optimizer.zero_grad()
 
-    # grad_norms = clip_grad_norms(optimizer.param_groups, opts.max_grad_norm)
     loss.backward()
     # Clip gradient norms and get (clipped) gradient norms for logging
     if args.clip == True:
-        clip_grad_value_(DAGG.parameters(), 1.0)
-
-
+        clip_grad_value_(p_model.parameters(), 1.0)
 
     optimizer.step()
 
-
     elbo = torch.mean(log_joint.detach() - pi_log_likelihood.detach())
-
 
     return elbo.item()
 
+def test(args, p_model, q_model, dataloader_validate):
 
-
-def test(args, DAGG, Rout, dataloader_validate):
-
-    DAGG.eval()
-    Rout.eval()
+    p_model.eval()
+    q_model.eval()
 
     batch_count = len(dataloader_validate)
     with torch.no_grad():
@@ -101,28 +98,24 @@ def test(args, DAGG, Rout, dataloader_validate):
 
         for _, graphs in enumerate(dataloader_validate):
 
-            log_likelihood, pis = Rout(graphs['dG'][0], args.sample_size, return_pi=True)
+            log_likelihood, pis = q_model(graphs['dG'][0], args.sample_size, return_pi=True)
 
-
-
-            log_joint = -DAGG(graphs['dG'][0], pis)
+            log_joint = -p_model(graphs['dG'][0], pis)
             elbo = -torch.mean(log_joint.detach() - log_likelihood.detach())
             total_elbo = total_elbo + elbo
-
-
-
 
     return total_elbo / batch_count
 
 
 # Main training function
 
-def train(args, DAGG, Rout,feature_map, dataloader_train, dataloader_valid):
+def train(args, p_model, q_model, data_statistics, dataloader_train, dataloader_valid):
+    """
+    maximize the elbo using `p_model` as the generative model $p(A)$ and `q_model` as the inference model $p(\pii | G)$ 
+    """
 
-    optimizer = optim.Adam([DAGG.parameters(), Rout.parameters()], lr=args.lr)
+    optimizer = optim.Adam([p_model.parameters(), q_model.parameters()], lr=args.lr)
     scheduler = MultiStepLR(optimizer, milestones=args.milestones,gamma=args.gamma)
-
-
 
     log_history = defaultdict(list)
 
@@ -134,10 +127,9 @@ def train(args, DAGG, Rout,feature_map, dataloader_train, dataloader_valid):
         writer = None
 
 
-
-    for epoch  in range(args.epochs):
+    for epoch in range(args.epochs):
         # train
-        loss= train_epoch(args, DAGG, Rout,dataloader_train,optimizer, scheduler, log_history, feature_map,epoch)
+        loss= train_epoch(args, p_model, q_model,dataloader_train,optimizer, scheduler, log_history, epoch)
 
         epoch += 1
 
@@ -145,9 +137,8 @@ def train(args, DAGG, Rout,feature_map, dataloader_train, dataloader_valid):
             writer.add_scalar('{} {} Loss/train'.format(args.note, args.graph_type), loss, epoch)
 
         print('Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
-        save_model(epoch, args, DAGG, Rout, feature_map=feature_map)
+        save_model(epoch, args, p_model, q_model, data_statistics=data_statistics)
         print('Model Saved - Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
-
 
         log_history['train_elbo'].append(loss)
 
@@ -156,9 +147,7 @@ def train(args, DAGG, Rout,feature_map, dataloader_train, dataloader_valid):
         df_iter['batch_elbo'] = log_history['batch_elbo']
         df_iter['batch_time'] = log_history['batch_time']
 
-
         df_epoch['train_elbo'] = log_history['train_elbo']
-
 
         df_iter.to_csv(args.logging_iter_path, index=False)
         df_epoch.to_csv(args.logging_epoch_path, index=False)

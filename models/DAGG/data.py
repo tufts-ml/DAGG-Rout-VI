@@ -108,14 +108,14 @@ class Graph_Adj_Matrix(Dataset):
 
 
 class Graph_to_Adj_Matrix:
-    def __init__(self, args, feature_map, random_bfs=False):
+    def __init__(self, args, feature_map):
         print('Generating adj matrix...')
         self.feature_map = feature_map
         # No. of previous nodes to consider for edge prediction
         self.max_prev_node = args.max_prev_node
         # Head and tail of adjacency vector to consider for edge prediction
         self.max_head_and_tail = args.max_head_and_tail
-        self.random_bfs = random_bfs
+
         if self.max_prev_node is None and self.max_head_and_tail is None:
             print('Please provide max_prev_node or max_head_and_tail')
             exit()
@@ -131,45 +131,27 @@ class Graph_to_Adj_Matrix:
         graph = dgl.to_networkx(graph, node_attrs=['feat'])
 
         x_item = torch.zeros((self.max_nodes, self.feature_len))
+
         adj_feature_mat = self.graph_to_matrix(graph, self.feature_map['node_forward'], self.feature_map['edge_forward'], perm)
+
         x_item[0:adj_feature_mat.shape[0], :adj_feature_mat.shape[1]] = adj_feature_mat
+
         return {'x': x_item, 'len': len(adj_feature_mat)}
 
     def graph_to_matrix(self, in_graph, node_map, edge_map, perm):
+
         n = len(in_graph.nodes())
         len_node_vec, _, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
             len(node_map), len(edge_map), self.max_prev_node, self.max_head_and_tail)
 
-        # #-----------------------
-        # perm = None
-        # self.random_bfs = True
-        # #------------------
+        # TODO: examine the permutation is legal
+        seq = perm
 
-        if perm is None:
-            if self.random_bfs:
-                n = len(in_graph.nodes())
-                # Create a random permutaion of graph nodes
-                perm = torch.randperm(n)
-                adj = nx.to_numpy_matrix(in_graph, nodelist=perm.numpy(), dtype=int)
-                G = nx.from_numpy_matrix(adj)
-                start_id = 0
-                # Construct bfs ordering starting from a random node
-                bfs_seq = get_bfs_seq(G, start_id)
-                seq = bfs_seq
-
-
-        else:
-            # TODO: examine the permutation is legal
-            seq = perm
         # relabel graph
         seq = seq.cpu().numpy() #decide if really use learnable seq
         order_map = {seq[i]: i for i in range(n)}
         graph = nx.relabel_nodes(in_graph, order_map)
         #graph=in_graph
-
-
-
-
 
         # 3D adjacecny matrix in case of edge_features (each A[i, j] is a len_edge_vec size vector)
         adj_mat_2d = torch.ones((n, num_nodes_to_consider))
