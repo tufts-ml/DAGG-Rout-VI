@@ -14,6 +14,10 @@ enviroment setup: "pip install -r requirements.txt"
 ## 1. Training
 To list the arguments, run the following command:
 ```
+python main.py -h
+```
+To train the model on datasets with Rout and DAGG, run the following:
+```
 python main.py -dataset caveman_small
 ```
 
