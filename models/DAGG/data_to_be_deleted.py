@@ -2,9 +2,7 @@ import pickle
 import torch
 from torch.utils.data import Dataset
 import networkx as nx
-from datasets.preprocess import get_bfs_seq
 from models.DAGG.helper import graph_to_matrix, get_attributes_len_for_graph_rnn
-import dgl
 
 
 class Graph_Adj_Matrix_from_file(Dataset):

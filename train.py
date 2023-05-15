@@ -11,7 +11,59 @@ from utils import save_model, load_model, get_model_attribute, get_last_checkpoi
 
 
 
+# Main training function
+# TODO: add documentation of this function
 
+def train(args, p_model, q_model, data_statistics, dataloader_train, dataloader_valid):
+    """
+    maximize the elbo using `p_model` as the generative model $p(A)$ and `q_model` as the inference model $p(\pii | G)$ 
+    Args:
+       args:
+       p_model:
+       q_model:
+       data_statistics:
+       dataloader_train:
+       dataloader_valid:
+        
+    """
+
+    optimizer = optim.Adam([{"params": p_model.parameters()}, {"params": q_model.parameters()}], lr=args.lr)
+
+
+    log_history = defaultdict(list)
+
+
+    if args.log_tensorboard:
+        writer = SummaryWriter(
+            log_dir=args.tensorboard_path+ ' ' + args.time, flush_secs=5)
+    else:
+        writer = None
+
+
+    for epoch in range(args.epochs):
+        # train
+        loss= train_epoch(args, p_model, q_model,dataloader_train,optimizer, log_history, epoch)
+
+        epoch += 1
+
+        if args.log_tensorboard:
+            writer.add_scalar('{} {} Loss/train'.format(args.note, args.dataset), loss, epoch)
+
+        print('Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
+        save_model(epoch, args, p_model, q_model, data_statistics=data_statistics)
+        print('Model Saved - Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
+
+        log_history['train_elbo'].append(loss)
+
+        df_iter = pd.DataFrame()
+        df_epoch = pd.DataFrame()
+        df_iter['batch_elbo'] = log_history['batch_elbo']
+        df_iter['batch_time'] = log_history['batch_time']
+
+        df_epoch['train_elbo'] = log_history['train_elbo']
+
+        df_iter.to_csv(args.logging_iter_path, index=False)
+        df_epoch.to_csv(args.logging_epoch_path, index=False)
 
 
 # remove the epoch argument from the argument, and move the print clause out 
@@ -86,7 +138,7 @@ def train_batch(args, p_model, q_model,optimizer, graph):
 
     return elbo.item()
 
-def test(args, p_model, q_model, dataloader_validate):
+def validate_elbo(args, p_model, q_model, dataloader_validate):
 
     p_model.eval()
     q_model.eval()
@@ -106,47 +158,3 @@ def test(args, p_model, q_model, dataloader_validate):
     return total_elbo / batch_count
 
 
-# Main training function
-
-def train(args, p_model, q_model, data_statistics, dataloader_train, dataloader_valid):
-    """
-    maximize the elbo using `p_model` as the generative model $p(A)$ and `q_model` as the inference model $p(\pii | G)$ 
-    """
-
-    optimizer = optim.Adam([{"params": p_model.parameters()}, {"params": q_model.parameters()}], lr=args.lr)
-
-
-    log_history = defaultdict(list)
-
-
-    if args.log_tensorboard:
-        writer = SummaryWriter(
-            log_dir=args.tensorboard_path+ ' ' + args.time, flush_secs=5)
-    else:
-        writer = None
-
-
-    for epoch in range(args.epochs):
-        # train
-        loss= train_epoch(args, p_model, q_model,dataloader_train,optimizer, log_history, epoch)
-
-        epoch += 1
-
-        if args.log_tensorboard:
-            writer.add_scalar('{} {} Loss/train'.format(args.note, args.dataset), loss, epoch)
-
-        print('Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
-        save_model(epoch, args, p_model, q_model, data_statistics=data_statistics)
-        print('Model Saved - Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
-
-        log_history['train_elbo'].append(loss)
-
-        df_iter = pd.DataFrame()
-        df_epoch = pd.DataFrame()
-        df_iter['batch_elbo'] = log_history['batch_elbo']
-        df_iter['batch_time'] = log_history['batch_time']
-
-        df_epoch['train_elbo'] = log_history['train_elbo']
-
-        df_iter.to_csv(args.logging_iter_path, index=False)
-        df_epoch.to_csv(args.logging_epoch_path, index=False)

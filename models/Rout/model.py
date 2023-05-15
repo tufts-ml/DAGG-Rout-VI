@@ -3,18 +3,22 @@ from torch import nn
 import math
 from typing import NamedTuple
 from models.Rout.generation import generation
-from models.Rout.sequtils import  compute_in_batches,CachedLookup,sample_many
+from models.Rout.sequtils import  compute_in_batches,CachedLookup
 from torch_geometric.utils import (get_laplacian, to_scipy_sparse_matrix)
 from scipy.sparse.linalg import eigs, eigsh
 import numpy as np
 from torch.nn import DataParallel
-from models.gcn.net.appnp_net_node import APPNET
-from models.gcn.net.gat_net_node import GATNet
-from models.gcn.net.gcn_net_node import GCNNet
+from models.Rout.gnn.net.appnp_net_node import APPNET
+from models.Rout.gnn.net.gat_net_node import GATNet
+from models.Rout.gnn.net.gcn_net_node import GCNNet
 
 
 
 class Rout(nn.Module):
+    """
+    This class defines the conditional distribution of node orders given a graph. It is used as the q distribution 
+    to calculate the VI lower bound of the likelihood of a graph under an autoregressive generative model.  
+    """
 
     def __init__(self, args, data_statistics):
 
@@ -76,10 +80,12 @@ class Rout(nn.Module):
         """
         This function samples `n_samples` of node orders from this q distribution and returns their log-likelihoods 
 
-        :param input: g: dgl graph
-        :return:
-        pi: Tensor, graph nodes order
-        ll: Tensor, log-likelihodd for the pi
+        Args: 
+            g: dgl graph
+       
+        Return:
+            pi: Tensor, graph nodes order
+            ll: Tensor, log-likelihodd for the pi
         """
 
         g=g[0]['dG'].to(self.args.device)
@@ -97,7 +103,6 @@ class Rout(nn.Module):
         ll = self._calc_log_likelihood(_log_p, pi, mask)
 
         return pi, ll
-
 
 
 
@@ -132,11 +137,6 @@ class Rout(nn.Module):
         pe *= sign
         return pe.to(edge_index.device)
 
-
-
-
-    def beam_search(self, *args, **kwargs):
-        return self.problem.beam_search(*args, **kwargs, model=self)
 
     def precompute_fixed(self, input):
         embeddings, _ = self.embedder(self._init_embed(input))

@@ -1,80 +1,30 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torch.utils.data import Dataset
 from torch.utils.data._utils.collate import default_collate as collate
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from models.DAGG.helper import get_attributes_len_for_graph_rnn
-from models.DAGG.data import Graph_to_Adj_Matrix
 import numpy as np
 import torch.nn.init as init
 import networkx as nx
 from models.DAGG.attention import AttentionDecoder
+
+
+
 EPS = 1e-9
-
-class MLP_Softmax(nn.Module):
-    """
-    A deterministic linear output layer
-    """
-
-    def __init__(self, input_size, embedding_size, output_size, dropout=0):
-        super(MLP_Softmax, self).__init__()
-        self.mlp = nn.Sequential(
-            MLP_Plain(input_size, embedding_size, output_size, dropout),
-            nn.Softmax(dim=2)
-        )
-
-    def forward(self, input):
-        return self.mlp(input)
-
-
-class MLP_Log_Softmax(nn.Module):
-    """
-    A deterministic linear output layer
-    """
-
-    def __init__(self, input_size, embedding_size, output_size, dropout=0):
-        super(MLP_Log_Softmax, self).__init__()
-        self.mlp = nn.Sequential(
-            MLP_Plain(input_size, embedding_size, output_size, dropout),
-            nn.LogSoftmax(dim=2)
-        )
-
-    def forward(self, input):
-        return self.mlp(input)
-
-
-class MLP_Plain(nn.Module):
-    """
-    A deterministic linear output layer
-    """
-
-    def __init__(self, input_size, embedding_size, output_size, dropout=0):
-        super(MLP_Plain, self).__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(input_size, embedding_size),
-            nn.ReLU(),
-            nn.Dropout(p=dropout),
-            # nn.Linear(embedding_size, embedding_size),
-            # nn.ReLU(),
-            # nn.Dropout(p=dropout),
-            nn.Linear(embedding_size, output_size),
-        )
-
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                m.weight.data = init.xavier_uniform_(
-                    m.weight.data, gain=nn.init.calculate_gain('relu'))
-
-    def forward(self, input):
-        return self.mlp(input)
-
-
-
 
 
 class DAGG(nn.Module):
+    #TODO: add documentation 
+    """
+    This class defines the DAGG model, which is an autoregressive graph generative model. It has two main functions: likelihood 
+    calculation and sampling. The first function computes the likelihood of a graph with given node orders, and the second 
+    function samples graphs by sequentially add nodes and edges to a graph. 
+    """
     def __init__(self, args, data_statistics):
         super().__init__()
+
         self.args = args
         self.data_statistics = data_statistics
         self.processor = Graph_to_Adj_Matrix(args, data_statistics)
@@ -104,16 +54,17 @@ class DAGG(nn.Module):
     # probability calculation
     def forward(self, g, pis):
         '''
-        This model is used for computing the log-likelihood of the given graph
-        Input:
-        g: dgl graph
-        pis: Tensor, the permutation of graph node order
-        Return: negative log-likelihodd of the given graph
+        The forward function computes the log-likelihood of the given graph using given node orders. 
+
+        Args:
+            g: a dgl graph with `n` nodes
+            pis: a Tensor of shape `(k, n)`, containing `k` permutations of graph nodes
+
+        Return: negative log-likelihodd of the given graph using `k` node permutations 
         '''
 
         data = [self.processor(g, perms) for perms in pis]
         data = collate(data)
-
 
         x_unsorted = data['x'].to(self.args.device)
 
@@ -129,8 +80,6 @@ class DAGG(nn.Module):
         # sort input for packing variable length sequences
         x_len, sort_indices = torch.sort(x_len_unsorted, dim=0, descending=True)
         x = torch.index_select(x_unsorted, 0, sort_indices)
-
-
 
 
         # Teacher forcing: Feed the target as the next input
@@ -237,20 +186,23 @@ class DAGG(nn.Module):
         swapped_loss = torch.empty_like(loss)
         swapped_loss[sort_indices] = loss
 
+        negative_log_like = swapped_loss 
 
+        return negative_log_like
 
-        return swapped_loss
-
-    def sample(self, eval_args):
+    def sample(self, size, batch_size=32):
         '''
-        Sample graphs from the DAGG.
-        Return: list: [g1,g2,.....]
+        Sample graphs from the DAGG model.
+        Args: 
+            size: int, the number of graph samples to be generated 
+            batch_size: int, batch size for the sampling procedure  
+
+        Return: a list [g1,g2,.....] of `size` graph samples
         '''
-        train_args = eval_args.train_args
 
+        max_num_node = self.data_statistics.max_num_node
+        min_num_node = self.data_statistics.min_num_node
 
-
-        max_num_node = eval_args.max_num_node
         len_node_vec, len_edge_vec, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
             len(self.data_statistics['node_forward']), len(self.data_statistics['edge_forward']),
             self.args.max_prev_node, self.args.max_head_and_tail)
@@ -258,16 +210,16 @@ class DAGG(nn.Module):
 
         graphs = []
 
-        for _ in range(eval_args.count // eval_args.batch_size):
+        for _ in range(size // batch_size):
 
             x_pred_node = np.zeros(
-                (eval_args.batch_size, max_num_node), dtype=np.int32)
+                (batch_size, max_num_node), dtype=np.int32)
             # [batch_size] * [num of nodes] * [num_nodes_to_consider]
             x_pred_edge = np.zeros(
-                (eval_args.batch_size, max_num_node, num_nodes_to_consider), dtype=np.int32)
+                (batch_size, max_num_node, num_nodes_to_consider), dtype=np.int32)
 
             node_level_input = torch.zeros(
-                eval_args.batch_size, 1, feature_len, device=eval_args.device)
+                batch_size, 1, feature_len, device=self.args.device)
             # Initialize to node level start token
             node_level_input[:, 0, len_node_vec - 2] = 1
             past=None
@@ -280,21 +232,21 @@ class DAGG(nn.Module):
                 node_level_pred = self.output_node(node_level_output)
                 # [batch_size] * [node_feature_len] for torch.multinomial
                 node_level_pred = node_level_pred.reshape(
-                    eval_args.batch_size, len_node_vec)
+                    batch_size, len_node_vec)
                 # [batch_size]: Sampling index to set 1 in next node_level_input and x_pred_node
                 # Add a small probability for each node label to avoid zeros
                 node_level_pred[:, :-2] += EPS
                 # Start token should not be sampled. So set it's probability to 0
                 node_level_pred[:, -2] = 0
                 # End token should not be sampled if i less than min_num_node
-                if i < eval_args.min_num_node:
+                if i < min_num_node:
                     node_level_pred[:, -1] = 0
                 sample_node_level_output = torch.multinomial(
                     node_level_pred, 1).reshape(-1)
                 node_level_input = torch.zeros(
-                    eval_args.batch_size, 1, feature_len, device=eval_args.device)
+                    batch_size, 1, feature_len, device=self.args.device)
                 node_level_input[torch.arange(
-                    eval_args.batch_size), 0, sample_node_level_output] = 1
+                    batch_size), 0, sample_node_level_output] = 1
 
                 # [batch_size] * [num of nodes]
                 x_pred_node[:, i] = sample_node_level_output.cpu().data
@@ -303,17 +255,9 @@ class DAGG(nn.Module):
                 hidden_edge = self.embedding_node_to_edge(node_level_output)
                 hidden_edge = hidden_edge.view(hidden_edge.size(0), 1, hidden_edge.size(1))
 
-                hidden_edge_rem_layers = torch.zeros(
-                    train_args.num_layers -
-                    1, eval_args.batch_size, hidden_edge.size(2),
-                    device=eval_args.device)
-                # [num_layers] * [batch_size] * [hidden_len]
-                # model['edge_level_rnn'].hidden = torch.cat(
-                #     (hidden_edge.permute(1, 0, 2), hidden_edge_rem_layers), dim=0)
-
                 # [batch_size] * [1] * [edge_feature_len]
                 edge_level_input = torch.zeros(
-                    eval_args.batch_size, 1, len_edge_vec, device=eval_args.device)
+                    batch_size, 1, len_edge_vec, device=self.args.device)
                 # Initialize to edge level start token
                 edge_level_input[:, 0, len_edge_vec - 2] = 1
                 for j in range(min(num_nodes_to_consider, i)):
@@ -323,7 +267,7 @@ class DAGG(nn.Module):
                     edge_level_output,past_e,_ = self.edge_level_transformer(edge_level_input,past_e)
                     # [batch_size] * [edge_feature_len] needed for torch.multinomial
                     edge_level_output = edge_level_output.reshape(
-                        eval_args.batch_size, len_edge_vec)
+                        batch_size, len_edge_vec)
 
                     # [batch_size]: Sampling index to set 1 in next edge_level input and x_pred_edge
                     # Add a small probability for no edge to avoid zeros
@@ -333,7 +277,7 @@ class DAGG(nn.Module):
                     sample_edge_level_output = torch.multinomial(
                         edge_level_output, 1).reshape(-1)
                     edge_level_input = torch.zeros(
-                        eval_args.batch_size, 1, len_edge_vec, device=eval_args.device)
+                        batch_size, 1, len_edge_vec, device=self.args.device)
                     edge_level_input[:, 0, sample_edge_level_output] = 1
 
                     # Setting edge feature for next node_level_input
@@ -344,7 +288,7 @@ class DAGG(nn.Module):
                     x_pred_edge[:, i, j] = sample_edge_level_output.cpu().data
 
             # Save the batch of graphs
-            for k in range(eval_args.batch_size):
+            for k in range(batch_size):
                 G = nx.Graph()
 
                 for v in range(max_num_node):
@@ -361,13 +305,13 @@ class DAGG(nn.Module):
                 for u in range(len(G.nodes())):
                     for p in range(min(num_nodes_to_consider, u)):
                         if x_pred_edge[k, u, p] < len(self.data_statistics['edge_forward']):
-                            if train_args.max_prev_node is not None:
+                            if self.args.max_prev_node is not None:
                                 v = u - p - 1
-                            elif train_args.max_head_and_tail is not None:
-                                if p < train_args.max_head_and_tail[1]:
+                            elif self.args.max_head_and_tail is not None:
+                                if p < self.args.max_head_and_tail[1]:
                                     v = u - p - 1
                                 else:
-                                    v = p - train_args.max_head_and_tail[1]
+                                    v = p - self.args.max_head_and_tail[1]
 
                             G.add_edge(
                                 u, v, label=self.data_statistics['edge_backward'][x_pred_edge[k, u, p]])
@@ -388,7 +332,144 @@ class DAGG(nn.Module):
         return graphs
 
 
+class Graph_to_Adj_Matrix:
+    def __init__(self, args, data_statistics):
+        print('Generating adj matrix...')
+        self.data_statistics= data_statistics
+        # No. of previous nodes to consider for edge prediction
+        self.max_prev_node = args.max_prev_node
+        # Head and tail of adjacency vector to consider for edge prediction
+        self.max_head_and_tail = args.max_head_and_tail
 
+        if self.max_prev_node is None and self.max_head_and_tail is None:
+            print('Please provide max_prev_node or max_head_and_tail')
+            exit()
+
+        self.max_nodes = data_statistics['max_nodes']
+        len_node_vec, len_edge_vec, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
+            len(data_statistics['node_forward']), len(data_statistics['edge_forward']),
+            self.max_prev_node, self.max_head_and_tail)
+        self.feature_len = len_node_vec + num_nodes_to_consider * len_edge_vec
+
+    def __call__(self, graph, perm=None):
+        # TODO given a graph and permutation, return an adj matrix, i.e., reimplement Graph_Adj_Matrix_from_file.__getitem__
+        graph = graph[0]['G']
+
+        x_item = torch.zeros((self.max_nodes, self.feature_len))
+
+        adj_feature_mat = self.graph_to_matrix(graph, self.data_statistics['node_forward'], self.data_statistics['edge_forward'], perm)
+
+        x_item[0:adj_feature_mat.shape[0], :adj_feature_mat.shape[1]] = adj_feature_mat
+
+        return {'x': x_item, 'len': len(adj_feature_mat)}
+
+    def graph_to_matrix(self, in_graph, node_map, edge_map, perm):
+
+
+        n = len(in_graph.nodes())
+        len_node_vec, _, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
+            len(node_map), len(edge_map), self.max_prev_node, self.max_head_and_tail)
+
+        # TODO: examine the permutation is legal
+        seq = perm
+
+        # relabel graph
+        seq = seq.cpu().numpy() #decide if really use learnable seq
+        order_map = {seq[i]: i for i in range(n)}
+        graph = nx.relabel_nodes(in_graph, order_map)
+        #graph=in_graph
+
+        # 3D adjacecny matrix in case of edge_features (each A[i, j] is a len_edge_vec size vector)
+        adj_mat_2d = torch.ones((n, num_nodes_to_consider))
+        adj_mat_2d.tril_(diagonal=-1)
+        adj_mat_3d = torch.zeros((n, num_nodes_to_consider, len(edge_map)))
+
+        node_mat = torch.zeros((n, len_node_vec))
+
+        for v, data in graph.nodes.data():
+            ind = node_map[data['label']]
+            node_mat[v, ind] = 1
+
+        for u, v, data in graph.edges.data():
+            if self.max_prev_node is not None:
+                if abs(u - v) <= self.max_prev_node:
+                    adj_mat_3d[max(u, v), max(u, v) - min(u, v) -
+                               1, edge_map[data['label']]] = 1
+                    adj_mat_2d[max(u, v), max(u, v) - min(u, v) - 1] = 0
+
+            elif self.max_head_and_tail is not None:
+                if abs(u - v) <= self.max_head_and_tail[1]:
+                    adj_mat_3d[max(u, v), max(u, v) - min(u, v) -
+                               1, edge_map[data['label']]] = 1
+                    adj_mat_2d[max(u, v), max(u, v) - min(u, v) - 1] = 0
+                elif min(u, v) < self.max_head_and_tail[0]:
+                    adj_mat_3d[max(u, v), self.max_head_and_tail[1] +
+                               min(u, v), edge_map[data['label']]] = 1
+                    adj_mat_2d[max(u, v), self.max_head_and_tail[1] + min(u, v)] = 0
+
+        adj_mat = torch.cat((adj_mat_3d, adj_mat_2d.reshape(adj_mat_2d.size(
+            0), adj_mat_2d.size(1), 1), torch.zeros((n, num_nodes_to_consider, 2))), dim=2)
+        adj_mat = adj_mat.reshape((adj_mat.size(0), -1))
+
+        return torch.cat((node_mat, adj_mat), dim=1)
+
+
+class MLP_Softmax(nn.Module):
+    """
+    A deterministic linear output layer
+    """
+
+    def __init__(self, input_size, embedding_size, output_size, dropout=0):
+        super(MLP_Softmax, self).__init__()
+        self.mlp = nn.Sequential(
+            MLP_Plain(input_size, embedding_size, output_size, dropout),
+            nn.Softmax(dim=2)
+        )
+
+    def forward(self, input):
+        return self.mlp(input)
+
+
+class MLP_Log_Softmax(nn.Module):
+    """
+    A deterministic linear output layer
+    """
+
+    def __init__(self, input_size, embedding_size, output_size, dropout=0):
+        super(MLP_Log_Softmax, self).__init__()
+        self.mlp = nn.Sequential(
+            MLP_Plain(input_size, embedding_size, output_size, dropout),
+            nn.LogSoftmax(dim=2)
+        )
+
+    def forward(self, input):
+        return self.mlp(input)
+
+
+class MLP_Plain(nn.Module):
+    """
+    A deterministic linear output layer
+    """
+
+    def __init__(self, input_size, embedding_size, output_size, dropout=0):
+        super(MLP_Plain, self).__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(input_size, embedding_size),
+            nn.ReLU(),
+            nn.Dropout(p=dropout),
+            # nn.Linear(embedding_size, embedding_size),
+            # nn.ReLU(),
+            # nn.Dropout(p=dropout),
+            nn.Linear(embedding_size, output_size),
+        )
+
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                m.weight.data = init.xavier_uniform_(
+                    m.weight.data, gain=nn.init.calculate_gain('relu'))
+
+    def forward(self, input):
+        return self.mlp(input)
 
 
 
