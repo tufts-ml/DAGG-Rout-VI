@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import math
 from typing import NamedTuple
-from generation import generation
+from models.Rout.generation import generation
 from models.Rout.sequtils import  compute_in_batches,CachedLookup,sample_many
 from torch_geometric.utils import (get_laplacian, to_scipy_sparse_matrix)
 from scipy.sparse.linalg import eigs, eigsh
@@ -18,7 +18,7 @@ class Rout(nn.Module):
 
     def __init__(self, args, data_statistics):
 
-        super(AttentionModel, self).__init__()
+        super(Rout, self).__init__()
 
         self.embedding_dim = args.gnn_out_dim
         self.hidden_dim = args.gnn_hidden_dim
@@ -30,15 +30,15 @@ class Rout(nn.Module):
         self.is_orienteering = False
         self.is_pctsp = False
         #sepcital for graph generation
-        self.gnn_type=args.gnn_type
+        self.q_gnn_type=args.q_gnn_type
         self.args=args
-        self.featrue_map=featuremap
+        self.data_statistics=data_statistics
         #self.model=model
-        if self.gnn_type == 'gcn':
+        if self.q_gnn_type == 'gcn':
             self.gnn = GCNNet(args, 5, out_dim=32).to(args.device)
-        elif self.gnn_type == 'gat':
+        elif self.q_gnn_type == 'gat':
             self.gnn = GATNet(args, 5, out_dim=32).to(args.device)
-        elif self.gnn_type == 'appnp':
+        elif self.q_gnn_type == 'appnp':
             self.gnn = APPNET(args, 5, out_dim=32).to(args.device)
         else: 
             raise Exception("No such GNN type: " + str(self.gnn_type))
@@ -62,12 +62,6 @@ class Rout(nn.Module):
         self.W_placeholder = nn.Parameter(torch.Tensor(2 * self.embedding_dim))
         self.W_placeholder.data.uniform_(-1, 1)  # Placeholder should be in range of activations
 
-        # self.embedder = GraphAttentionEncoder(
-        #     n_heads=n_heads,
-        #     embed_dim=embedding_dim,
-        #     n_layers=self.n_encode_layers,
-        #     normalization=normalization
-        # )
 
         # For each node we compute (glimpse key, glimpse value, logit key) so 3 * self.embedding_dim
         self.project_node_embeddings = nn.Linear(self.embedding_dim, 3 * self.embedding_dim, bias=False)
@@ -83,11 +77,12 @@ class Rout(nn.Module):
         This function samples `n_samples` of node orders from this q distribution and returns their log-likelihoods 
 
         :param input: g: dgl graph
-        :param return_pi: whether to return the output sequences, this is optional as it is not compatible with
-        using DataParallel as the results may be of different lengths on different GPUs
         :return:
+        pi: Tensor, graph nodes order
+        ll: Tensor, log-likelihodd for the pi
         """
 
+        g=g[0]['dG'].to(self.args.device)
         embeddings = self.add_PE(g)
         embeddings = self.gnn(g, embeddings)
         embeddings = embeddings.repeat(n_samples, 1, 1)
@@ -348,7 +343,7 @@ class Rout(nn.Module):
         glimpse_K, glimpse_V, logit_K = self._get_attention_node_data(fixed, state)
 
         # Compute the mask
-        mask = state.get_mask(edge_index)
+        mask = state.get_connected_mask(edge_index)
 
         # Compute logits (unnormalized log_p)
         log_p, glimpse = self._one_to_many_logits(query, glimpse_K, glimpse_V, logit_K, mask)

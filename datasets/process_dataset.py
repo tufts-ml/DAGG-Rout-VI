@@ -305,23 +305,23 @@ def produce_random_walk_sampled_graphs(
 
 # Routine to create datasets
 def create_graphs(args):
-    base_path = os.path.join(args.dataset_path, f'{args.graph_type}/')
+    base_path = os.path.join(args.dataset_path, f'{args.dataset}/')
     # provide fake dataset (adopt from graphRNN code)
-    if args.graph_type=='ladder':
+    if args.dataset=='ladder':
         graphs = []
         for i in range(100, 201):
             graph = nx.ladder_graph(i)
             default_label_graph(graph)
             graphs.append(graph)
         args.max_prev_node = 10
-    elif args.graph_type=='ladder_small':
+    elif args.dataset=='ladder_small':
         graphs = []
         for i in range(2, 11):
             graph = nx.ladder_graph(i)
             default_label_graph(graph)
             graphs.append(graph)
         args.max_prev_node = 10
-    elif args.graph_type=='tree':
+    elif args.dataset=='tree':
         graphs = []
         for i in range(2, 5):
             for j in range(3, 5):
@@ -329,7 +329,7 @@ def create_graphs(args):
                 default_label_graph(graph)
                 graphs.append(graph)
         args.max_prev_node = 256
-    elif args.graph_type=='caveman':
+    elif args.dataset=='caveman':
         graphs = []
         for i in range(2, 3):
             for j in range(30, 81):
@@ -339,7 +339,7 @@ def create_graphs(args):
                     graphs.append(graph)
         args.max_prev_node = 100
 
-    elif args.graph_type=='caveman_small':
+    elif args.dataset=='caveman_small':
         graphs = []
         for i in range(2, 3):
             for j in range(6, 11):
@@ -349,7 +349,7 @@ def create_graphs(args):
                     graphs.append(graph)
         args.max_prev_node = 20
 
-    elif args.graph_type=='path':
+    elif args.dataset=='path':
         graphs = []
         for l in range(2, 51):
             graph = nx.path_graph(l) # default 0.8
@@ -357,7 +357,7 @@ def create_graphs(args):
             graphs.append(graph)
         args.max_prev_node = 50
 
-    elif args.graph_type=='caveman_small_single':
+    elif args.dataset=='caveman_small_single':
         graphs = []
         for i in range(2, 3):
             for j in range(8, 9):
@@ -366,9 +366,9 @@ def create_graphs(args):
                     default_label_graph(graph)
                     graphs.append(graph)
         args.max_prev_node = 20
-    elif args.graph_type.startswith('community'):
+    elif args.dataset.startswith('community'):
         graphs = []
-        num_communities = int(args.graph_type[-1])
+        num_communities = int(args.dataset[-1])
         print('Creating dataset with ', num_communities, ' communities')
 
         # c_sizes = [15] * num_communities
@@ -378,7 +378,7 @@ def create_graphs(args):
             default_label_graph(graph)
             graphs.append(graph)
         args.max_prev_node = 80
-    elif args.graph_type.startswith('MMSBM'):
+    elif args.dataset.startswith('MMSBM'):
         graphs = []
         print('Creating MMSBM dataset')
         n=60
@@ -394,7 +394,7 @@ def create_graphs(args):
             graphs.append(graph)
         args.max_prev_node = 60
 
-    elif args.graph_type=='grid':
+    elif args.dataset=='grid':
         graphs = []
         for i in range(10,20):
             for j in range(10,20):
@@ -402,7 +402,7 @@ def create_graphs(args):
                 default_label_graph(graph)
                 graphs.append(graph)
         args.max_prev_node = 40
-    elif args.graph_type=='grid_small':
+    elif args.dataset=='grid_small':
         graphs = []
         for i in range(2,8):
             for j in range(2,8):
@@ -413,7 +413,7 @@ def create_graphs(args):
                 default_label_graph(graph)
                 graphs.append(graph)
         args.max_prev_node = 15
-    elif args.graph_type=='grid_big':
+    elif args.dataset=='grid_big':
         graphs = []
         for i in range(36, 46):
             for j in range(36, 46):
@@ -421,7 +421,7 @@ def create_graphs(args):
                 default_label_graph(graph)
                 graphs.append(graph)
         args.max_prev_node = 90
-    elif args.graph_type=='barabasi':
+    elif args.dataset=='barabasi':
         graphs = []
         for i in range(100,200):
              for j in range(4,5):
@@ -430,7 +430,7 @@ def create_graphs(args):
                      default_label_graph(graph)
                      graphs.append(graph)
         args.max_prev_node = 130
-    elif args.graph_type=='barabasi_small':
+    elif args.dataset=='barabasi_small':
         graphs = []
         for i in range(4,21):
              for j in range(3,4):
@@ -440,7 +440,7 @@ def create_graphs(args):
                      graphs.append(graph)
         args.max_prev_node = 20
 
-    elif 'barabasi_noise' in args.graph_type:
+    elif 'barabasi_noise' in args.dataset:
         graphs = []
         for i in range(100,101):
             for j in range(4,5):
@@ -451,75 +451,75 @@ def create_graphs(args):
         args.max_prev_node = 99
 
     # real  datasets
-    elif 'PROTEINS_full' == args.graph_type:
+    elif 'PROTEINS_full' == args.dataset:
         node_invariants = ['Degree']
         min_num_nodes, max_num_nodes = 20, None
         min_num_edges, max_num_edges = None, None
         args.max_prev_node = 80
 
-    elif 'DD' == args.graph_type:
+    elif 'DD' == args.dataset:
         node_invariants = ['Degree']
         min_num_nodes, max_num_nodes = 100, 500
         min_num_edges, max_num_edges = None, None
         args.max_prev_node = 230
 
-    elif 'ENZYMES' in args.graph_type:
+    elif 'ENZYMES' in args.dataset:
         # Node invariants - Options 'Degree' and 'CC'
         node_invariants = ['Degree']
         min_num_nodes, max_num_nodes = 10, None
         min_num_edges, max_num_edges = None, None
         args.max_prev_node = 25
 
-    elif 'Lung' == args.graph_type:
+    elif 'Lung' == args.dataset:
         # base_path = os.path.join(args.dataset_path, 'Lung/')
         input_path = base_path + 'lung.txt'
         min_num_nodes, max_num_nodes = None, 50
         min_num_edges, max_num_edges = None, None
         args.max_prev_node = 47
 
-    elif 'Breast' == args.graph_type:
+    elif 'Breast' == args.dataset:
         # base_path = os.path.join(args.dataset_path, 'Breast/')
         input_path = base_path + 'breast.txt'
         min_num_nodes, max_num_nodes = None, None
         min_num_edges, max_num_edges = None, None
         args.max_prev_node = 90
 
-    elif 'Leukemia' == args.graph_type:
+    elif 'Leukemia' == args.dataset:
         # base_path = os.path.join(args.dataset_path, 'Leukemia/')
         input_path = base_path + 'leukemia.txt'
         min_num_nodes, max_num_nodes = None, None
         min_num_edges, max_num_edges = None, None
         args.max_prev_node = 89
 
-    elif 'Yeast' == args.graph_type:
+    elif 'Yeast' == args.dataset:
         # base_path = os.path.join(args.dataset_path, 'Yeast/')
         input_path = base_path + 'yeast.txt'
         min_num_nodes, max_num_nodes = None, 50
         min_num_edges, max_num_edges = None, None
         args.max_prev_node = 47
 
-    elif 'All' == args.graph_type:
+    elif 'All' == args.dataset:
         # base_path = os.path.join(args.dataset_path, 'All/')
         input_path = base_path + 'all.txt'
         # No limit on number of nodes and edges
         min_num_nodes, max_num_nodes = None, None
         min_num_edges, max_num_edges = None, None
 
-    elif 'citeseer' == args.graph_type:
+    elif 'citeseer' == args.dataset:
         # base_path = os.path.join(args.dataset_path, 'citeseer/')
         random_walk_iterations = 150  # Controls size of graph
         num_factor = 5  # Controls size of dataset
         min_num_nodes, max_num_nodes = None, None
         min_num_edges, max_num_edges = 20, None
 
-    elif 'citeseer_small' == args.graph_type:
+    elif 'citeseer_small' == args.dataset:
         # base_path = os.path.join(args.dataset_path, 'citeseer_small/')
         random_walk_iterations = 150  # Controls size of graph
         num_factor = 5  # Controls size of dataset
         min_num_nodes, max_num_nodes = 4, 20
         min_num_edges, max_num_edges = None, None
 
-    elif 'cora' in args.graph_type:
+    elif 'cora' in args.dataset:
         # base_path = os.path.join(args.dataset_path, 'cora/')
         random_walk_iterations = 150  # Controls size of graph
         num_factor = 5  # Controls size of dataset
@@ -528,7 +528,7 @@ def create_graphs(args):
         min_num_edges, max_num_edges = 20, None
 
     else:
-        print('Dataset - {} is not valid'.format(args.graph_type))
+        print('Dataset - {} is not valid'.format(args.dataset))
         exit()
     args.current_dataset_path = os.path.join(base_path, 'graphs/')
     args.current_processed_dataset_path = args.current_dataset_path
@@ -537,31 +537,31 @@ def create_graphs(args):
     if args.produce_graphs:
         mkdir(args.current_dataset_path)
 
-        if args.graph_type in ['Lung', 'Breast', 'Leukemia', 'Yeast', 'All']:
+        if args.dataset in ['Lung', 'Breast', 'Leukemia', 'Yeast', 'All']:
             count = produce_graphs_from_raw_format(
                 args, input_path, args.current_dataset_path, args.num_graphs,
                 min_num_nodes=min_num_nodes, max_num_nodes=max_num_nodes,
                 min_num_edges=min_num_edges, max_num_edges=max_num_edges)
 
-        elif args.graph_type in ['ENZYMES', 'DD', 'PROTEINS_full']:
+        elif args.dataset in ['ENZYMES', 'DD', 'PROTEINS_full']:
             count = produce_graphs_from_graphrnn_format(
-                args, base_path, args.graph_type, args.current_dataset_path,
+                args, base_path, args.dataset, args.current_dataset_path,
                 num_graphs=args.num_graphs, node_invariants=node_invariants,
                 min_num_nodes=min_num_nodes, max_num_nodes=max_num_nodes,
                 min_num_edges=min_num_edges, max_num_edges=max_num_edges)
 
-        elif args.graph_type in ['cora', 'citeseer_small', 'citeseer']:
+        elif args.dataset in ['cora', 'citeseer_small', 'citeseer']:
             count = produce_random_walk_sampled_graphs(
-                args, base_path, args.graph_type, args.current_dataset_path,
+                args, base_path, args.dataset, args.current_dataset_path,
                 num_graphs=args.num_graphs, iterations=random_walk_iterations,
                 num_factor=num_factor, min_num_nodes=min_num_nodes,
                 max_num_nodes=max_num_nodes, min_num_edges=min_num_edges,
                 max_num_edges=max_num_edges)
 
-        elif args.graph_type in ['ladder', 'ladder_small', 'tree', 'caveman',
+        elif args.dataset in ['ladder', 'ladder_small', 'tree', 'caveman',
                                 'caveman_small', 'caveman_small_single', 'grid',
                                 'grid_small', 'barabasi', 'barabasi_small', 'grid_big', 'path', 'MMSBM'] or\
-            args.graph_type.startswith('community') or 'barabasi_noise' in args.graph_type:
+            args.dataset.startswith('community') or 'barabasi_noise' in args.dataset:
             save_graphs(args.current_dataset_path, graphs)
             count = len(graphs)
 

@@ -1,9 +1,6 @@
 import torch
 from typing import NamedTuple
-from models.seq_attention.sequtils import mask_long2bool, mask_long_scatter
-from torch.utils.data._utils.collate import default_collate as collate
-from models.graph_rnn.data import Graph_to_Adj_Matrix
-from models.graph_rnn.train import evaluate_loss as eval_loss_graph_rnn
+from models.Rout.sequtils import mask_long2bool, mask_long_scatter
 
 class generation(NamedTuple):
     # Fixed input
@@ -22,6 +19,7 @@ class generation(NamedTuple):
     cur_coord: torch.Tensor
     i: torch.Tensor  # Keeps track of step
     note:str #model used for graph generation
+    first:bool
 
     @property
     def visited(self):
@@ -66,31 +64,11 @@ class generation(NamedTuple):
             lengths=torch.zeros(batch_size, 1, device=loc.device),
             cur_coord=None,
             i=torch.zeros(1, dtype=torch.int64, device=loc.device),  # Vector with length num_steps
-            note='GraphRNN' #type generation model
+            note='DAGG',
+            first=True
         )
 
-    #compute p(G,\pi)
-    def get_final_cost(self, nx_g ,pis, model, args, feature_map):
-        #bathc_G: [nxG,nxG...]
-        #graph generation model
 
-        assert self.all_finished()
-        # assert self.visited_.
-        nll_p = torch.empty(self.loc, device=self.loc.device)
-        if self.note == 'GraphRNN':
-            # data process and training for graphRNN
-            processor = Graph_to_Adj_Matrix (args, feature_map, random_bfs=True)
-
-
-            data = [processor(nx_g, perms) for perms in pis]
-            data = collate(data)
-            nll_p_m = eval_loss_graph_rnn(args, model, data, feature_map)
-
-
-
-
-
-        return nll_p_m, None
 
     def update(self, selected):
 
@@ -120,7 +98,7 @@ class generation(NamedTuple):
 
         #i record sample step.
         return self._replace(first_a=first_a, prev_a=prev_a, visited_=visited_,
-                             lengths=lengths, cur_coord=cur_coord, i=self.i + 1, note='GraphRNN')
+                             lengths=lengths, cur_coord=cur_coord, i=self.i + 1, note='DAGG',first=False)
 
     def all_finished(self):
         # Exactly n steps
@@ -134,7 +112,7 @@ class generation(NamedTuple):
 
     def get_connected_mask(self, edge_index):
         def find_connected_nodes(edge_index, nodes):
-            edge_index =edge_index.cpu().numpy()
+            edge_index = edge_index.cpu().numpy()
             connected_nodes = set()
             for sender, receiver in zip(edge_index[0], edge_index[1]):
                 if sender in nodes:
@@ -142,17 +120,18 @@ class generation(NamedTuple):
                 elif receiver in nodes:
                     connected_nodes.add(sender)
             return list(connected_nodes)
-        if self.first==True:
+
+        if self.first == True:
             return self.visited > 0
         else:
             mask = self.visited > 0  # Hacky way to return bool or uint8 depending on pytorch version
             add_mask = torch.ones_like(mask)
-            add_mask = add_mask>0 #all True
-            batch_size=self.visited.size()[0]
+            add_mask = add_mask > 0  # all True
+            batch_size = self.visited.size()[0]
             for b in range(batch_size):
-                #starting get mask for graph b
-                current_nodes = self.visited[b,0].nonzero(as_tuple=True)[0].cpu().numpy()
+                # starting get mask for graph b
+                current_nodes = self.visited[b, 0].nonzero(as_tuple=True)[0].cpu().numpy()
                 connected_nodes = find_connected_nodes(edge_index, current_nodes)
-                add_mask[b,0,connected_nodes] = False #unmask connected graph
-            return mask+add_mask
+                add_mask[b, 0, connected_nodes] = False  # unmask connected graph
+            return mask + add_mask
 

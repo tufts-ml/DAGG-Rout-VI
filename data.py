@@ -241,31 +241,31 @@ def create_dataset(args):
     print('No. of edge labels: {}'.format(len(feature_map['edge_forward'])))
     print(args.__dict__)
 
-    if args.note == 'DAGG':
-        start = time.time()
-        if args.nobfs:
-            args.max_prev_node = feature_map['max_nodes'] - 1
-        if args.max_prev_node is None:
-            args.max_prev_node = calc_max_prev_node(args.current_processed_dataset_path)
 
-        args.max_head_and_tail = None
-        print('max_prev_node:', args.max_prev_node)
+    start = time.time()
+    if args.nobfs:
+        args.max_prev_node = feature_map['max_nodes'] - 1
+    if args.max_prev_node is None:
+        args.max_prev_node = calc_max_prev_node(args.current_processed_dataset_path)
 
-        end = time.time()
-        print('Time taken to calculate max_prev_node = {:.3f}s'.format(
-            end - start))
+    args.max_head_and_tail = None
+    print('max_prev_node:', args.max_prev_node)
+
+    end = time.time()
+    print('Time taken to calculate max_prev_node = {:.3f}s'.format(
+        end - start))
 
     random.shuffle(graphs)
     graphs_train = graphs[: int(0.80 * len(graphs))]
     graphs_validate = graphs[int(0.80 * len(graphs)): int(0.90 * len(graphs))]
     # show graphs statistics
-    print('Model:', args.note)
+    print('Model:', 'DAGG')
     print('Device:', args.device)
-    print('Graph type:', args.graph_type)
+    print('Graph type:', args.dataset)
     print('Training set: {}, Validation set: {}'.format(
         len(graphs_train), len(graphs_validate)))
 
-    if args.graph_type in ['zinc', 'qm9']:
+    if args.dataset in ['zinc', 'qm9']:
         dataset = NumpyTupleDataset.load(args.current_dataset_path, graphs, feature_map)
         dataset_train = torch.utils.data.Subset(dataset, graphs_train)  # 120,803
         dataset_validate = torch.utils.data.Subset(dataset, graphs_validate)

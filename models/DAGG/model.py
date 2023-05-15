@@ -6,8 +6,9 @@ from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from models.DAGG.helper import get_attributes_len_for_graph_rnn
 from models.DAGG.data import Graph_to_Adj_Matrix
 import numpy as np
+import torch.nn.init as init
 import networkx as nx
-from models.DAGG.att_decoder import AttentionDecoder
+from models.DAGG.attention import AttentionDecoder
 EPS = 1e-9
 
 class MLP_Softmax(nn.Module):
@@ -72,42 +73,47 @@ class MLP_Plain(nn.Module):
 
 
 class DAGG(nn.Module):
-    def __init__(self, args, feature_map, processor):
+    def __init__(self, args, data_statistics):
         super().__init__()
         self.args = args
-        self.processor = Graph_to_Adj_Matrix(args, feature_map)
-        args.feature_len = processor.feature_len
+        self.data_statistics = data_statistics
+        self.processor = Graph_to_Adj_Matrix(args, data_statistics)
+        #args.feature_len = self.processor.feature_len
+        len_node_vec, len_edge_vec, num_nodes_to_consider = get_attributes_len_for_graph_rnn(len(
+            data_statistics['node_forward']), len(data_statistics['edge_forward']), args.max_prev_node, args.max_head_and_tail)
 
 
         self.node_level_transformer = AttentionDecoder(args.embedding_size_node_level_transformer, n_head=4)
         self.edge_level_transformer= AttentionDecoder(args.embedding_size_edge_level_transformer, n_head=4)
-        self.feature_map = feature_map
+        self.data_statistics = data_statistics
         self.embedding_node_to_edge = MLP_Plain(
             input_size=args.hidden_size_node_level_transformer, embedding_size=args.embedding_size_node_level_transformer,
             output_size=args.hidden_size_edge_level_transformer).to(device=args.device)
         self.output_node = MLP_Softmax(
             input_size=args.hidden_size_node_level_transformer, embedding_size=args.embedding_size_node_output,
-            output_size=feature_map.len_node_vec).to(device=args.device)
+            output_size=len_node_vec).to(device=args.device)
+        self.output_edge = MLP_Softmax(
+            args.embedding_size_edge_level_transformer, args.embedding_size_edge_level_transformer, len_edge_vec)
 
-        len_node_vec, len_edge_vec, num_nodes_to_consider = get_attributes_len_for_graph_rnn(len(
-            feature_map['node_forward']), len(feature_map['edge_forward']), args.max_prev_node, args.max_head_and_tail)
+
         feature_len = len_node_vec + num_nodes_to_consider * len_edge_vec
         self.node_project =  MLP_Plain(feature_len, args.embedding_size_node_level_transformer, args.embedding_size_node_level_transformer)
         self.edge_project =  MLP_Plain(len_edge_vec, args.embedding_size_edge_level_transformer, args.embedding_size_edge_level_transformer)
 
 
     # probability calculation
-    def forward(self, nx_g, pis):
+    def forward(self, g, pis):
+        '''
+        This model is used for computing the log-likelihood of the given graph
+        Input:
+        g: dgl graph
+        pis: Tensor, the permutation of graph node order
+        Return: negative log-likelihodd of the given graph
         '''
 
-        :param adj:tensor (sample_size,n,n)
-        :param nlabel: (sample_size, n, nlabel)
-        :param n: scalar
-        :return: tensor(1,), log-likelihood
-        '''
-        data = [self.processor(nx_g, perms) for perms in pis]
+        data = [self.processor(g, perms) for perms in pis]
         data = collate(data)
-        data['n'] = int(data['n'].cpu()[0])
+
 
         x_unsorted = data['x'].to(self.args.device)
 
@@ -116,7 +122,7 @@ class DAGG(nn.Module):
         x_unsorted = x_unsorted[:, 0:max(x_len_unsorted), :]
 
         len_node_vec, len_edge_vec, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
-            len(self.feature_map['node_forward']), len(self.feature_map['edge_forward']),
+            len(self.data_statistics['node_forward']), len(self.data_statistics['edge_forward']),
             self.args.max_prev_node, self.args.max_head_and_tail)
 
         batch_size = x_unsorted.size(0)
@@ -140,7 +146,7 @@ class DAGG(nn.Module):
 
         # Forward propogation
         node_level_input = self.node_project(node_level_input)
-        node_level_output = self.node_level_transformer(node_level_input)
+        node_level_output,_,_= self.node_level_transformer(node_level_input)
 
         # Evaluating node predictions
         x_pred_node = self.output_node(node_level_output)
@@ -192,10 +198,11 @@ class DAGG(nn.Module):
         edge_level_input = self.edge_project(edge_level_input)
         edge_level_input = torch.cat([hidden_edge,edge_level_input], dim=1)
 
-
-
-        x_pred_edge = self.edge_level_transformer(edge_level_input)[:,1:]
+        x_edge_len = x_edge_len.cpu()
+        x_pred_edge,_,_ = self.edge_level_transformer(edge_level_input)
+        x_pred_edge = x_pred_edge[:,1:]
         # cleaning the padding i.e setting it to zero
+        x_pred_edge = self.output_edge(x_pred_edge)
         x_pred_node = pack_padded_sequence(
             x_pred_node, x_len + 1, batch_first=True)
         x_pred_node, lens_pred_node = pad_packed_sequence(x_pred_node, batch_first=True)
@@ -204,7 +211,7 @@ class DAGG(nn.Module):
         x_pred_edge, lens_pred_edge = pad_packed_sequence(x_pred_edge, batch_first=True)
 
         x_node = torch.cat(
-            (x[:, :, :len_node_vec], torch.zeros(batch_size, 1, len_node_vec, device=args.device)), dim=1)
+            (x[:, :, :len_node_vec], torch.zeros(batch_size, 1, len_node_vec, device=self.args.device)), dim=1)
         x_node[torch.arange(batch_size), x_len, len_node_vec - 1] = 1
 
         x_edge = torch.cat((edge_mat, torch.zeros(
@@ -235,21 +242,18 @@ class DAGG(nn.Module):
         return swapped_loss
 
     def sample(self, eval_args):
+        '''
+        Sample graphs from the DAGG.
+        Return: list: [g1,g2,.....]
+        '''
         train_args = eval_args.train_args
-        feature_map = get_model_attribute(
-            'feature_map', eval_args.model_path, eval_args.device)
-        train_args.device = eval_args.device
 
-        model = create_model(train_args, feature_map)
-        load_gmodel(eval_args.model_path, eval_args.device, model)
 
-        for _, net in model.items():
-            net.eval()
 
         max_num_node = eval_args.max_num_node
         len_node_vec, len_edge_vec, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
-            len(feature_map['node_forward']), len(feature_map['edge_forward']),
-            train_args.max_prev_node, train_args.max_head_and_tail)
+            len(self.data_statistics['node_forward']), len(self.data_statistics['edge_forward']),
+            self.args.max_prev_node, self.args.max_head_and_tail)
         feature_len = len_node_vec + num_nodes_to_consider * len_edge_vec
 
         graphs = []
@@ -267,12 +271,13 @@ class DAGG(nn.Module):
             # Initialize to node level start token
             node_level_input[:, 0, len_node_vec - 2] = 1
             past=None
+            past_e=None
             for i in range(max_num_node):
                 # [batch_size] * [1] * [hidden_size_node_level_rnn]
                 node_level_input = self.node_project(node_level_input)
-                node_level_output,past = model.node_level_transformer(node_level_input, past)
+                node_level_output,past,_ = self.node_level_transformer(node_level_input, past)
                 # [batch_size] * [1] * [node_feature_len]
-                node_level_pred = model.output_node(node_level_output)
+                node_level_pred = self.output_node(node_level_output)
                 # [batch_size] * [node_feature_len] for torch.multinomial
                 node_level_pred = node_level_pred.reshape(
                     eval_args.batch_size, len_node_vec)
@@ -295,7 +300,8 @@ class DAGG(nn.Module):
                 x_pred_node[:, i] = sample_node_level_output.cpu().data
 
                 # [batch_size] * [1] * [hidden_size_edge_level_rnn]
-                hidden_edge = model.embedding_node_to_edge(node_level_output)
+                hidden_edge = self.embedding_node_to_edge(node_level_output)
+                hidden_edge = hidden_edge.view(hidden_edge.size(0), 1, hidden_edge.size(1))
 
                 hidden_edge_rem_layers = torch.zeros(
                     train_args.num_layers -
@@ -313,7 +319,8 @@ class DAGG(nn.Module):
                 for j in range(min(num_nodes_to_consider, i)):
                     # [batch_size] * [1] * [edge_feature_len]
                     edge_level_input = self.edge_project(edge_level_input)
-                    edge_level_output = model.edge_level_transformer(edge_level_input)
+                    edge_level_input = torch.cat([hidden_edge, edge_level_input], dim=1)
+                    edge_level_output,past_e,_ = self.edge_level_transformer(edge_level_input,past_e)
                     # [batch_size] * [edge_feature_len] needed for torch.multinomial
                     edge_level_output = edge_level_output.reshape(
                         eval_args.batch_size, len_edge_vec)
@@ -344,16 +351,16 @@ class DAGG(nn.Module):
                     # End node token
                     if x_pred_node[k, v] == len_node_vec - 1:
                         break
-                    elif x_pred_node[k, v] < len(feature_map['node_forward']):
+                    elif x_pred_node[k, v] < len(self.data_statistics['node_forward']):
                         G.add_node(
-                            v, label=feature_map['node_backward'][x_pred_node[k, v]])
+                            v, label=self.data_statistics['node_backward'][x_pred_node[k, v]])
                     else:
                         print('Error in sampling node features')
                         exit()
 
                 for u in range(len(G.nodes())):
                     for p in range(min(num_nodes_to_consider, u)):
-                        if x_pred_edge[k, u, p] < len(feature_map['edge_forward']):
+                        if x_pred_edge[k, u, p] < len(self.data_statistics['edge_forward']):
                             if train_args.max_prev_node is not None:
                                 v = u - p - 1
                             elif train_args.max_head_and_tail is not None:
@@ -363,8 +370,8 @@ class DAGG(nn.Module):
                                     v = p - train_args.max_head_and_tail[1]
 
                             G.add_edge(
-                                u, v, label=feature_map['edge_backward'][x_pred_edge[k, u, p]])
-                        elif x_pred_edge[k, u, p] == len(feature_map['edge_forward']):
+                                u, v, label=self.data_statistics['edge_backward'][x_pred_edge[k, u, p]])
+                        elif x_pred_edge[k, u, p] == len(self.data_statistics['edge_forward']):
                             # No edge
                             pass
                         else:

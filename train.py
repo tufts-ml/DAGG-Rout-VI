@@ -15,7 +15,7 @@ from utils import save_model, load_model, get_model_attribute, get_last_checkpoi
 
 
 # remove the epoch argument from the argument, and move the print clause out 
-def train_epoch(args, p_model, q_model, dataloader_train, optimizer, scheduler, log_history, epoch):
+def train_epoch(args, p_model, q_model, dataloader_train, optimizer, log_history, epoch):
     """
     One training epoch 
     """
@@ -34,7 +34,7 @@ def train_epoch(args, p_model, q_model, dataloader_train, optimizer, scheduler, 
 
         st = time.time()
 
-        elbo = train_batch(args, p_model, q_model, optimizer, graphs[0]['dG'].to(args.device))
+        elbo = train_batch(args, p_model, q_model, optimizer, graphs)
         total_loss = total_loss + elbo
 
         spent = time.time() - st
@@ -45,8 +45,7 @@ def train_epoch(args, p_model, q_model, dataloader_train, optimizer, scheduler, 
         log_history['batch_elbo'].append(elbo)
         log_history['batch_time'].append(spent)
 
-        for _, sched in scheduler.items():
-            sched.step()
+
 
     avg_loss = total_loss / train_size
 
@@ -98,9 +97,9 @@ def test(args, p_model, q_model, dataloader_validate):
 
         for _, graphs in enumerate(dataloader_validate):
 
-            log_likelihood, pis = q_model(graphs['dG'][0], args.sample_size, return_pi=True)
+            log_likelihood, pis = q_model(graphs, args.sample_size, return_pi=True)
 
-            log_joint = -p_model(graphs['dG'][0], pis)
+            log_joint = -p_model(graphs, pis)
             elbo = -torch.mean(log_joint.detach() - log_likelihood.detach())
             total_elbo = total_elbo + elbo
 
@@ -114,8 +113,8 @@ def train(args, p_model, q_model, data_statistics, dataloader_train, dataloader_
     maximize the elbo using `p_model` as the generative model $p(A)$ and `q_model` as the inference model $p(\pii | G)$ 
     """
 
-    optimizer = optim.Adam([p_model.parameters(), q_model.parameters()], lr=args.lr)
-    scheduler = MultiStepLR(optimizer, milestones=args.milestones,gamma=args.gamma)
+    optimizer = optim.Adam([{"params": p_model.parameters()}, {"params": q_model.parameters()}], lr=args.lr)
+
 
     log_history = defaultdict(list)
 
@@ -129,12 +128,12 @@ def train(args, p_model, q_model, data_statistics, dataloader_train, dataloader_
 
     for epoch in range(args.epochs):
         # train
-        loss= train_epoch(args, p_model, q_model,dataloader_train,optimizer, scheduler, log_history, epoch)
+        loss= train_epoch(args, p_model, q_model,dataloader_train,optimizer, log_history, epoch)
 
         epoch += 1
 
         if args.log_tensorboard:
-            writer.add_scalar('{} {} Loss/train'.format(args.note, args.graph_type), loss, epoch)
+            writer.add_scalar('{} {} Loss/train'.format(args.note, args.dataset), loss, epoch)
 
         print('Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
         save_model(epoch, args, p_model, q_model, data_statistics=data_statistics)

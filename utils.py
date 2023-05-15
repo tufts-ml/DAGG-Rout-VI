@@ -73,7 +73,7 @@ def create_dirs(args):
         os.makedirs(args.logging_path)
 
 
-def save_model(epoch, args, gmodel, pmodel,  zmodel=None, optimizer=None, scheduler=None, **extra_args):
+def save_model(epoch, args, gmodel, qmodel, optimizer=None,**extra_args):
     if not os.path.isdir(args.current_model_save_path):
         os.makedirs(args.current_model_save_path)
 
@@ -81,21 +81,19 @@ def save_model(epoch, args, gmodel, pmodel,  zmodel=None, optimizer=None, schedu
     checkpoint = {'saved_args': args, 'epoch': epoch}
 
     save_items = {'gmodel': gmodel}
-    save_items['pmodel'] = pmodel
-    if zmodel is not None:
-        save_items['zmodel'] = {'zmodel': zmodel}
+    save_items['qmodel'] = qmodel
+
 
     if optimizer:
         save_items['optimizer'] = optimizer
-    if scheduler:
-        save_items['scheduler'] = scheduler
+
 
     for name, d in save_items.items():
-        save_dict = {}
-        for key, value in d.items():
-            save_dict[key] = value.state_dict()
+        #save_dict = {}
+        # for key, value in d.items():
+        #     save_dict[key] = value.state_dict()
 
-        checkpoint[name] = save_dict
+        checkpoint[name] = d.state_dict()
 
     if extra_args:
         for arg_name, arg in extra_args.items():
@@ -104,14 +102,12 @@ def save_model(epoch, args, gmodel, pmodel,  zmodel=None, optimizer=None, schedu
     torch.save(checkpoint, fname)
 
 
-def load_model(path, device, gmodel, pmodel, zmodel=None, optimizer=None, scheduler=None):
+def load_model(path, device, gmodel, pmodel, optimizer=None):
     checkpoint = torch.load(path, map_location=device)
 
-    for name, d in {'gmodel': gmodel, 'pmodel': pmodel,  'zmodel':zmodel, 'optimizer': optimizer, 'scheduler': scheduler}.items():
+    for name, d in {'gmodel': gmodel, 'pmodel': pmodel,  'optimizer': optimizer}.items():
         if d is not None:
-            for key, value in d.items():
-                if value is not None:
-                    value.load_state_dict(checkpoint[name][key])
+            d.load_state_dict(checkpoint[name])
 
         if name == 'gmodel' or name == 'pmodel':
             for _, value in d.items():

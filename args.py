@@ -13,7 +13,7 @@ class Args:
         self.parser.add_argument('--log_tensorboard', action='store_true', help='Whether to use tensorboard for logging')
         self.parser.add_argument('--save_model', default=True, action='store_true', help='Whether to save model')
         self.parser.add_argument('--print_interval', type=int, default=1, help='loss printing batch interval')
-        self.parser.add_argument('--epochs_save', type=int, default=5, help='model save epoch interval')
+        self.parser.add_argument('--epochs_save', type=int, default=1, help='model save epoch interval')
         self.parser.add_argument('--epochs_validate', type=int, default=1, help='model validate epoch interval')
 
         # Setup
@@ -26,9 +26,9 @@ class Args:
         self.parser.add_argument('--seed', type=int, default=123, help='random seed to reproduce performance/dataset')
 
         # Dataset specification
-        self.parser.add_argument('--dataset', default='MMSBM', help='Select dataset to train the model')
+        self.parser.add_argument('--dataset', default='caveman_small', help='Select dataset to train the model')
         self.parser.add_argument('--num_graphs', type=int, default=None, help='take complete dataset(None) | part of dataset')
-        self.parser.add_argument('--produce_graphs', default=True, action='store_true', help='Whether to reproduce graphs from a known distribution (e.g. SBM)')
+        self.parser.add_argument('--produce_graphs', default=False, action='store_true', help='Whether to reproduce graphs from a known distribution (e.g. SBM)')
         self.parser.add_argument('--label', default=False, action='store_true', help='Whether to use label infomation in dataset')
 
         #Specific to transformer in DAGG generative model 
@@ -49,22 +49,22 @@ class Args:
                                  help='activation type in transformer')
         self.parser.add_argument('--hidden_size_node_level_transformer', type=int, default=128,
                                  help='hidden size for node level transformer')
-        self.parser.add_argument('--embedding_size_node_level_transformer', type=int, default=64,
+        self.parser.add_argument('--embedding_size_node_level_transformer', type=int, default=128,
                                  help='the size for node level transformer input')
-        self.parser.add_argument('--embedding_size_node_output', type=int, default=64,
+        self.parser.add_argument('--embedding_size_node_output', type=int, default=128,
                                  help='the size of node output embedding')
-        self.parser.add_argument('--hidden_size_edge_level_transformer', type=int, default=16,
+        self.parser.add_argument('--hidden_size_edge_level_transformer', type=int, default=128,
                                  help='hidden size for edge level transformer')
-        self.parser.add_argument('--embedding_size_edge_level_transformer', type=int, default=8,
+        self.parser.add_argument('--embedding_size_edge_level_transformer', type=int, default=128,
                                  help='the size for edge level transformer input')
-        self.parser.add_argument('--embedding_size_edge_output', type=int, default=8,
+        self.parser.add_argument('--embedding_size_edge_output', type=int, default=128,
                                  help='the size of edge output embedding')
         self.parser.add_argument('--num_layers', type=int, default=4, help='layers of rnn')
         self.parser.add_argument('--nobfs', default=True, action='store_true',
                                  help='whether to use bfs constraint during sampling')
 
         # Specify to the GNN for the q distribution
-        self.parser.add_argument('--q_gnn_type', default='gat', help='type of GNN for q model: { gat | gcn | appnp}')
+        self.parser.add_argument('--q_gnn_type', default='gcn', help='type of GNN for q model: { gat | gcn | appnp}')
         self.parser.add_argument('--gnn_hidden_dim', type=int, default=32, help='gnn hidden dimension')
         self.parser.add_argument('--gnn_out_dim', type=int, default=32, help='gnn output dimension')
         self.parser.add_argument('--gnn_in_feat_dropout', type=float, default=0.0, help='gnn input feature dropout rate')
@@ -77,7 +77,7 @@ class Args:
         self.parser.add_argument('--gnn_pretrain_path', default='', help='petrained gnn path')
 
         # Specific to sampler of orders from the q distribution
-        self.parser.add_argument('--sample_size', type=int, default=1, help='sample size for gradient estimator')
+        self.parser.add_argument('--sample_size', type=int, default=10, help='sample size for gradient estimator')
         self.parser.add_argument('--use_mp_sampler',  default=True, action='store_true', help='Whether to multi-process for permutation sampler')
         self.parser.add_argument('--mp_num_workers', type=int, default=4, help='number of workers for permutation sampling')
 
@@ -131,7 +131,7 @@ class Args:
             type = args.q_gnn_type
         else:
             type = "unif"
-        args.fname = args.note + '_' + args.graph_type + "_" + type + "_" + bfs + "_" + args.time
+        args.fname = 'DAGG' + '_' + args.q_gnn_type + "_" + type + "_" + bfs + "_" + args.time
         args.dir_input = 'output/'
         args.experiment_path = args.dir_input + args.fname
         args.logging_path = args.experiment_path + '/' + 'logging/'

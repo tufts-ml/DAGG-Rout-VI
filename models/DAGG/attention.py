@@ -229,7 +229,7 @@ class AttentionDecoder(nn.Module):
         if isinstance(module, (nn.Linear, nn.Embedding, Conv1D)):
 
             # cf https://github.com/pytorch/pytorch/pull/5617
-            module.weight.data.normal_(mean=0.0, std=self.args.initializer_range)
+            module.weight.data.normal_(mean=0.0, std=0.1)
             if isinstance(module, (nn.Linear, Conv1D)) and module.bias is not None:
                 module.bias.data.zero_()
         elif isinstance(module, nn.LayerNorm):

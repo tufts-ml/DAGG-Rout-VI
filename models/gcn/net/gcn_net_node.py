@@ -14,21 +14,21 @@ class GCNNet(nn.Module):
     def __init__(self, args, node_len, out_dim):
         super().__init__()
         in_dim_node = node_len  # node_dim (feat is an integer)
-        hidden_dim = args.gcn_hidden_dim
+        hidden_dim = args.gnn_hidden_dim
         out_dim = out_dim
-        in_feat_dropout = args.gcn_in_feat_dropout
-        dropout = args.gcn_dropout
-        n_layers = args.gcn_num_layers
+        in_feat_dropout = args.gnn_in_feat_dropout
+        dropout = args.gnn_dropout
+        n_layers = args.gnn_num_layers
 
-        self.batch_norm = args.gcn_batch_norm
-        self.residual = args.gcn_residual
-        self.n_classes = args.gcn_n_classes
+        self.batch_norm = args.gnn_batch_norm
+        self.residual = args.gnn_residual
+        self.n_classes = args.gnn_n_classes
         self.device = args.device
         self.d_model = hidden_dim
 
         self.embedding_h = nn.Embedding(in_dim_node, hidden_dim)  # node feat is an integer
         self.in_feat_dropout = nn.Dropout(in_feat_dropout)
-        self.first_gcn = GCNLayer(in_dim_node, hidden_dim, F.relu, dropout,
+        self.first_gnn = GCNLayer(in_dim_node, hidden_dim, F.relu, dropout,
                                               self.batch_norm, self.residual)
         self.layers = nn.ModuleList([GCNLayer(hidden_dim, hidden_dim, F.relu, dropout,
                                               self.batch_norm, self.residual) for _ in range(n_layers - 1)])
@@ -56,7 +56,7 @@ class GCNNet(nn.Module):
         # p: positional(order) embedding
         # input embedding
 
-        h = self.first_gcn(g,torch.squeeze(h))
+        h = self.first_gnn(g,torch.squeeze(h))
 
 
         # GCN
