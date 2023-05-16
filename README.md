@@ -21,5 +21,12 @@ To train the model on datasets with Rout and DAGG, run the following:
 python main.py -dataset caveman_small
 ```
 
+## 2.Evaluation
+
+To evaluate the generated graph, run the following:
+```
+python main.py -task evaluation -load_model_path 'saved_model_path'
+```
+
 
 
