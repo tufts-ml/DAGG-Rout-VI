@@ -580,9 +580,6 @@ def create_graphs(args):
     print(feature_map)
 
     graphs = [i for i in range(count)]
-    random.seed(32)
-
-
 
 
     return graphs

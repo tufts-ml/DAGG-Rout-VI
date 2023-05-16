@@ -4,28 +4,26 @@ import torch
 
 
 
-def model_likelihood(args, model, graphs_indices, sample_size):
+def model_likelihood(args, model, graphs, sample_size):
     '''
     This function is to estimate likehood of the given graphs with DAGG.
     '''
-    graphs=[]
+#    graphs=[]
     fact_nodes_number=[]
     #load test graphs
 
 
-    for ind in graphs_indices:
-        with open(args.current_graphs_save_path + 'graph' + str(ind) + '.dat', 'rb') as f:
-            g = pickle.load(f)
-            graphs.append(g)
-            fact_nodes_number.append(np.math.factorial(g.number_of_nodes()))
+#    for ind in graphs_indices:
+#        with open(args.current_graphs_save_path + 'graph' + str(ind) + '.dat', 'rb') as f:
+#            g = pickle.load(f)
+#            graphs.append(g)
+#            fact_nodes_number.append(np.math.factorial(g.number_of_nodes()))
 
     record_len = [g.number_of_nodes() for g in graphs]
 
     llg= _get_log_likelihood(args, graphs, model, record_len, sample_size)
     mpg = _statistic(llg)
     pg = mpg * fact_nodes_number
-    print('Estimated probability is:')
-    print(pg)
 
     return pg
 
