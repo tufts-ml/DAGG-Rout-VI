@@ -8,7 +8,7 @@ class Args:
     def __init__(self):
         self.parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         # Logging & model saving
-        self.parser.add_argument('--task', default='train', help='train or evaluate the model')
+        self.parser.add_argument('--task', default='evaluate', help='train or evaluate the model')
         self.parser.add_argument('--clean_tensorboard', action='store_true', help='Clean tensorboard')
         self.parser.add_argument('--clean_temp', action='store_true', help='Clean temp folder')
         self.parser.add_argument('--log_tensorboard', action='store_true', help='Whether to use tensorboard for logging')
@@ -29,7 +29,7 @@ class Args:
         # Dataset specification
         self.parser.add_argument('--dataset', default='caveman_small', help='Select dataset to train the model')
         self.parser.add_argument('--num_graphs', type=int, default=None, help='take complete dataset(None) | part of dataset')
-        self.parser.add_argument('--produce_graphs', default=False, action='store_true', help='Whether to reproduce graphs from a known distribution (e.g. SBM)')
+        self.parser.add_argument('--produce_graphs', default=True, action='store_true', help='Whether to reproduce graphs from a known distribution (e.g. SBM)')
         self.parser.add_argument('--label', default=False, action='store_true', help='Whether to use label infomation in dataset')
 
         #Specific to transformer in DAGG generative model 
@@ -92,11 +92,21 @@ class Args:
         self.parser.add_argument('--gamma', type=float, default=0.3, help='Learning rate decay factor')
         self.parser.add_argument('--clip', default=True, action='store_true', help='whether to use clip gradient for generation model')
 
+        #Evaluation config
+        self.parser.add_argument('--record', default='DAGG_gcn_gcn_nobfs_2023_05_16_11_26_39',
+                                 help='foloder name for evaluation')
+        self.parser.add_argument('--eval_epoch', default=1, help='which epoch to evaluate')
+        self.parser.add_argument('--count', default=40, help='number of graphs to be sampled')
+        self.parser.add_argument('--metric_eval_batch_size', default=5, help='batch size for evaluation')
+
         # Model load parameters
         self.parser.add_argument('--load_model',  default=False, action='store_true', help='whether to load model')
         self.parser.add_argument('--load_model_path', default='output/GRAN_Lung_unif_nobfs_2021_01_24_23_55_12/', help='load model path')
         self.parser.add_argument('--load_device', default='cuda:0' if torch.cuda.is_available() else 'cpu', help='load device: cuda:[d] | cpu')
         self.parser.add_argument('--epochs_end', type=int, default=100, help='model in which epoch to load')
+        self.parser.add_argument('--current_dataset_path', default='datasets/caveman_small/graphs/', help='model in which epoch to load')
+
+
 
 
 
@@ -132,7 +142,11 @@ class Args:
             type = args.q_gnn_type
         else:
             type = "unif"
-        args.fname = 'DAGG' + '_' + args.q_gnn_type + "_" + type + "_" + bfs + "_" + args.time
+
+        if args.task == 'train':
+            args.fname = 'DAGG' + '_' + args.q_gnn_type + "_" + type + "_" + bfs + "_" + args.time
+        elif args.task == 'evaluate':
+            args.fname = args.record
         args.dir_input = 'output/'
         args.experiment_path = args.dir_input + args.fname
         args.logging_path = args.experiment_path + '/' + 'logging/'
@@ -147,9 +161,10 @@ class Args:
 
         args.load_model_path = None
 
-        args.current_dataset_path = None
+
         args.current_processed_dataset_path = None
         args.current_temp_path = args.temp_path
+        args.current_graphs_save_path = args.experiment_path + '/' +'predictions/'
 
         # noise argument for the barabasi_noise graph
         args.noise = 1

@@ -5,8 +5,8 @@ import torch.nn.functional as F
 import dgl
 import numpy as np
 import math
-from models.gcn.layer.gcn_layer import GCNLayer
-from models.gcn.layer.mlp_readout_layer import MLPReadout
+from models.Rout.gnn.layer.gcn_layer import GCNLayer
+from models.Rout.gnn.layer.mlp_readout_layer import MLPReadout
 
 
 class GCNNet(nn.Module):

@@ -8,7 +8,7 @@ from functools import partial
 import numpy as np
 import networkx as nx
 
-import metrics.mmd as mmd
+import thirdy_party.mmd as mmd
 
 PRINT_TIME = True
 MAX_WORKERS = 4

@@ -87,5 +87,6 @@ def evaluate(args, p_model):
     )
     #finish evaluating mmd
     #start evaluating graph likelihood
-    graph_likelihood = model_likelihood(p_model, graphs_test_indices, args.current_dataset_path, args.sample_size)
+    graph_likelihood = model_likelihood(args, p_model, graphs_test_indices, args.sample_size)
+
 

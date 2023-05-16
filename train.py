@@ -50,7 +50,7 @@ def train(args, p_model, q_model, data_statistics, dataloader_train, dataloader_
             writer.add_scalar('{} {} Loss/train'.format(args.note, args.dataset), loss, epoch)
 
         print('Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
-        save_model(epoch, args, p_model, q_model, data_statistics=data_statistics)
+        save_model(args, epoch, p_model, q_model)
         print('Model Saved - Epoch: {}/{}, train loss: {:.6f}'.format(epoch, args.epochs, loss))
 
         log_history['train_elbo'].append(loss)
@@ -96,6 +96,7 @@ def train_epoch(args, p_model, q_model, dataloader_train, optimizer, log_history
 
         log_history['batch_elbo'].append(elbo)
         log_history['batch_time'].append(spent)
+
 
 
 

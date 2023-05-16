@@ -8,8 +8,8 @@ import math
     Graph Attention Networks (Veličković et al., ICLR 2018)
     https://arxiv.org/abs/1710.10903
 """
-from models.gcn.layer.gat_layer import GATLayer
-from models.gcn.layer.mlp_readout_layer import MLPReadout
+from models.Rout.gnn.layer.gat_layer import GATLayer
+from models.Rout.gnn.layer.mlp_readout_layer import MLPReadout
 
 
 class GATNet(nn.Module):

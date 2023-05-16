@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
 
         # load the p and q models
-        p_model,qmodel = load_model(args)
+        p_model,qmodel = load_model(args, args.eval_epoch)
 
 
         # compute MMD values from multiple graphs statistics 
