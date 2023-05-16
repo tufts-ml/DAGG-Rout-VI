@@ -25,7 +25,7 @@ python main.py -dataset caveman_small
 
 To evaluate the generated graph, run the following:
 ```
-python main.py -task evaluation -load_model_path 'saved_model_path'
+python main.py -task evaluate -load_model_path 'saved_model_path'
 ```
 
 
