@@ -7,58 +7,6 @@ import numpy as np
 import pandas as pd
 from utils import get_model_attribute, load_graphs, save_graphs, get_last_checkpoint
 from models.DAGG.model import DAGG
-import metrics.mmd.stats
-
-LINE_BREAK = '----------------------------------------------------------------------\n'
-
-
-class ArgsEvaluate():
-    def __init__(self, name, epoch):
-        # Can manually select the device too
-        '''
-
-        :param name: str, output dir for a certain exp
-        :param epoch: int, epoch to evaluate
-        '''
-
-        self.device = torch.device(
-            'cuda:0' if torch.cuda.is_available() else 'cpu')
-
-        self.model_path = 'output/' + name + '/model_save' + "/epoch_" +str(epoch) + ".dat"
-
-        self.train_args = get_model_attribute(
-            'saved_args', self.model_path, self.device)
-
-        self.num_epochs = get_model_attribute(
-            'epoch', self.model_path, self.device)
-
-        # Whether to generate networkx format graphs for real datasets
-        self.generate_graphs = True
-
-        # Number of graphs to produce from the model
-        self.count = 1 # No larger than 50 for Enzymes(small dataset)
-        self.batch_size = 1 # Must be a factor of count(important)
-
-        self.metric_eval_batch_size = 200  #Prefer a factor of count
-
-
-
-        # Specific to GraphRNN
-        self.min_num_node = 0
-        self.max_num_node = 20
-
-        # Specific DFScodeRNN
-        self.max_num_edges = 50  #149 for ENZYMES
-
-        #Set for Likelihood
-        self.need_llh = True
-        self.llh_sample = 1000 #number of sample to estimate true likelihood
-        self.test_number = 1  #number of test graphs to be estimated for likelihood
-
-
-
-        self.graphs_save_path = 'output/' + name + '/generated_graphs/'
-        self.current_graphs_save_path = self.graphs_save_path
 
 
 
@@ -73,18 +21,18 @@ def patch_graph(graph):
     return graph
 
 
-def generate_graphs(eval_args, DAGG):
-
-    train_args = eval_args.train_args
-    graphs = DAGG.sample(eval_args)
+def generate_graphs(args, DAGG):
 
 
-    if os.path.isdir(eval_args.current_graphs_save_path):
-        shutil.rmtree(eval_args.current_graphs_save_path)
+    graphs = DAGG.sample(args.count)
 
-    os.makedirs(eval_args.current_graphs_save_path)
 
-    save_graphs(eval_args.current_graphs_save_path, graphs)
+    if os.path.isdir(args.current_graphs_save_path):
+        shutil.rmtree(args.current_graphs_save_path)
+
+    os.makedirs(args.current_graphs_save_path)
+
+    save_graphs(args.current_graphs_save_path, graphs)
 
 
 def print_stats(
@@ -106,14 +54,14 @@ def print_stats(
     print('MMD Joint Node label and degree - {:.6f}'.format(
         mean(node_label_and_degree)
     ))
-    print(LINE_BREAK)
+
 
 
 #save the rsult to the csv
 def save_stats(
     node_count_avg_ref, node_count_avg_pred, edge_count_avg_ref,
     edge_count_avg_pred, degree_mmd, clustering_mmd, orbit_mmd,
-    nspdk_mmd, node_label_mmd, edge_label_mmd, node_label_and_degree, eval_args):
+    nspdk_mmd, node_label_mmd, edge_label_mmd, node_label_and_degree, args):
     stats = {}
     stats['Node count avg Test'] = np.array([mean(node_count_avg_ref)])
     stats['Node count avg Generated'] = np.array([mean(node_count_avg_pred)])
@@ -131,4 +79,4 @@ def save_stats(
     stats['MMD Joint Node label and degree'] = np.array([mean(node_label_and_degree)])
     print(stats)
     hist = pd.DataFrame.from_dict(stats)
-    hist.to_csv('output/'+ eval_args.train_args.fname+ '/stats.csv')
+    hist.to_csv('output/'+ args.fname+ '/stats.csv')

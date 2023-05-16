@@ -3,11 +3,12 @@ import os, json
 import torch
 import numpy as np
 from args import Args
-from utils import create_dirs
+from utils import create_dirs,load_model
 from models.DAGG.model import DAGG
 from models.Rout.model import Rout
 from data import create_dataset
 from train import train
+from evaluate import evaluate
 
 
 if __name__ == '__main__':
@@ -40,20 +41,17 @@ if __name__ == '__main__':
         
     elif args.task == "evaluate":
 
+
+
         # load the p and q models
-        p_model = None
-        q_model = None
+        p_model,qmodel = load_model(args)
+
 
         # compute MMD values from multiple graphs statistics 
-
-
         # compute the approximate log-likelihood from importance sampling
+        evaluate(args, p_model)
 
 
-        # visualize a few samples
-
-
-        raise Exception("NOT IMPLEMENTED")
 
     else:
 

@@ -1,42 +1,28 @@
 import numpy as np
 import networkx
 import pickle
-from utils import load_model, get_model_attribute
+from utils import mp_sampler
 import torch
 from torch.utils.data._utils.collate import default_collate as collate
-from models.gcn.helper import mp_sampler
+#from models.gcn.helper import mp_sampler
 
 
 
-def model_likelihood(model, graphs_indices, graphs_path, sample_size, eval_args):
+def model_likelihood(model, graphs_indices, graphs_path, sample_size):
     graphs=[]
     fact_nodes_number=[]
     #load test graphs
-    train_args = eval_args.train_args
+
 
     for ind in graphs_indices:
         with open(graphs_path + 'graph' + str(ind) + '.dat', 'rb') as f:
             g = pickle.load(f)
             graphs.append(g)
             fact_nodes_number.append(np.math.factorial(g.number_of_nodes()))
-    #load model
-
-
-    train_args.device = eval_args.device
-    feature_map = get_model_attribute(
-        'feature_map', eval_args.model_path, eval_args.device)
-
-
-
-
-    load_model(eval_args.model_path, eval_args.device, model)
-    #eval mode for model
-    for _, net in model.items():
-        net.eval()
 
     record_len = [g.number_of_nodes() for g in graphs]
 
-    llg, l_rep= _get_log_likelihood(graphs, model, record_len, processor, eval_loss, train_args, feature_map, sample_size)
+    llg, l_rep= _get_log_likelihood(graphs, model, record_len, sample_size)
     mpg = _statistic(llg, l_rep)
     pg = mpg * fact_nodes_number
     print('Estimated probability is:')
@@ -53,9 +39,7 @@ def _get_log_likelihood(gs, model, record_len, processor, eval_loss, args, featu
 
     for i in range(sample_size):
         perms = _get_uniform_perm(record_len)
-        data = [processor(graph, perms) for graph, perms in zip(gs, perms)]
-        data = collate(data)
-        ll_p_m = -eval_loss(args, model, data, feature_map)
+        ll_p_m =  model(gs[i], perms)
         ll_p[:, i].copy_(ll_p_m)
         for j in range(len_g):
             log_rep = rep_computer.compute_repetition(gs[j], perms[j])

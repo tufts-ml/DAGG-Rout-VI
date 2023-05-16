@@ -5,6 +5,9 @@ import torch
 import networkx as nx
 import pynauty as pnt
 import numpy as np
+from torch.utils.data._utils import MP_STATUS_CHECK_INTERVAL, python_exit_status
+import torch.multiprocessing as multiprocessing
+from torch.distributions.distribution import Distribution
 
 
 def mkdir(path):
@@ -73,47 +76,25 @@ def create_dirs(args):
         os.makedirs(args.logging_path)
 
 
-def save_model(epoch, args, gmodel, qmodel, optimizer=None,**extra_args):
+def save_model(epoch, args, gmodel, qmodel):
     if not os.path.isdir(args.current_model_save_path):
         os.makedirs(args.current_model_save_path)
 
-    fname = args.current_model_save_path +'epoch' + '_' + str(epoch) + '.dat'
-    checkpoint = {'saved_args': args, 'epoch': epoch}
+    gmodel_path = args.current_model_save_path +'epoch' + '_' + 'gmodel'+'_' + str(epoch) + '.dat'
 
-    save_items = {'gmodel': gmodel}
-    save_items['qmodel'] = qmodel
+    torch.save(gmodel, gmodel_path)
 
+    qmodel_path = args.current_model_save_path + 'epoch' + '_' + 'qmodel' + '_' + str(epoch) + '.dat'
 
-    if optimizer:
-        save_items['optimizer'] = optimizer
+    torch.save(qmodel, qmodel_path)
 
 
-    for name, d in save_items.items():
-        #save_dict = {}
-        # for key, value in d.items():
-        #     save_dict[key] = value.state_dict()
-
-        checkpoint[name] = d.state_dict()
-
-    if extra_args:
-        for arg_name, arg in extra_args.items():
-            checkpoint[arg_name] = arg
-
-    torch.save(checkpoint, fname)
-
-
-def load_model(path, device, gmodel, pmodel, optimizer=None):
-    checkpoint = torch.load(path, map_location=device)
-
-    for name, d in {'gmodel': gmodel, 'pmodel': pmodel,  'optimizer': optimizer}.items():
-        if d is not None:
-            d.load_state_dict(checkpoint[name])
-
-        if name == 'gmodel' or name == 'pmodel':
-            for _, value in d.items():
-                if value is not None:
-                    value.to(device=device)
-
+def load_model(args):
+    gmodel_path = args.current_model_save_path + 'epoch' + '_' + 'gmodel' + '_' + str(epoch) + '.dat'
+    gmodel =torch.load(gmodel_path)
+    qmodel_path = args.current_model_save_path + 'epoch' + '_' + 'qmodel' + '_' + str(epoch) + '.dat
+    qmodel = torch.load(qmodel_path)
+    return gmodel, qmodel
 
 def get_last_checkpoint(args, epoch):
     """Retrieves the most recent checkpoint (highest epoch number)."""
@@ -215,5 +196,134 @@ def nauty_to_nx(na_G):
     raise NotImplementedError
     # pass
 
+def smart_perm(x, permutation):
+    assert x.size() == permutation.size()
+    if x.ndimension() == 1:
+        ret = x[permutation]
+    elif x.ndimension() == 2:
+        d1, d2 = x.size()
+        ret = x[
+            torch.arange(d1).unsqueeze(1).repeat((1, d2)).flatten(),
+            permutation.flatten()
+        ].view(d1, d2)
+    elif x.ndimension() == 3:
+        d1, d2, d3 = x.size()
+        ret = x[
+            torch.arange(d1).unsqueeze(1).repeat((1, d2 * d3)).flatten(),
+            torch.arange(d2).unsqueeze(1).repeat((1, d3)).flatten().unsqueeze(0).repeat((1, d1)).flatten(),
+            permutation.flatten()
+        ].view(d1, d2, d3)
+    else:
+        ValueError("Only 3 dimensions maximum")
+    return ret
+class PlackettLuce(Distribution):
+    """
+        Plackett-Luce distribution
+    """
+    arg_constraints = {"logits": constraints.real}
+    def __init__(self, logits):
+        # last dimension is for scores of plackett luce
+        super(PlackettLuce, self).__init__()
+        self.logits = logits
+        self.size = self.logits.size()
 
+    def sample(self, num_samples):
+        # sample permutations using Gumbel-max trick to avoid cycles
+        with torch.no_grad():
+            logits = self.logits.unsqueeze(0).expand(num_samples, *self.size)
+            u = torch.distributions.utils.clamp_probs(torch.rand_like(logits))
+            z = self.logits - torch.log(-torch.log(u))
+            samples = torch.sort(z, descending=True, dim=-1)[1]
+        return samples
+
+    def log_prob(self, samples):
+        # samples shape is: num_samples x self.size
+        # samples is permutations not permutation matrices
+        if samples.ndimension() == self.logits.ndimension():  # then we already expanded logits
+            logits = smart_perm(self.logits, samples)
+        elif samples.ndimension() > self.logits.ndimension():  # then we need to expand it here
+            logits = self.logits.unsqueeze(0).expand(*samples.size())
+            logits = smart_perm(logits, samples)
+        else:
+            raise ValueError("Something wrong with dimensions")
+        logp = (logits - reverse_logcumsumexp(logits, dim=-1)).sum(-1)
+        return logp
+class mp_sampler():
+    def __init__(self, args, vf2=False):
+        self.args = args
+        self._workers = []
+        self._index_queues = []
+        self.device = args.device
+        self._worker_result_queue = multiprocessing.Queue()
+        self._workers_done_event = multiprocessing.Event()
+        self._num_workers = args.mp_num_workers
+        self.max_cr_iteration = args.max_cr_iteration
+        wkl = worker_loop_vf2 if vf2 else worker_loop
+
+        for i in range(self._num_workers):
+            # No certainty which module multiprocessing_context is
+            index_queue = multiprocessing.Queue()  # type: ignore
+            # index_queue.cancel_join_thread()
+            w = multiprocessing.Process(
+                target=wkl,
+                args=(index_queue, self._worker_result_queue, self._workers_done_event))
+            w.daemon = True
+            w.start()
+            self._index_queues.append(index_queue)
+            self._workers.append(w)
+
+    def compute_repetition(self, graph, perm):
+        perm_length = len(perm)
+        # subgraphs = ([graph.subgraph(perm[:i + 1]) for i in range(len(perm))])
+        # for idx in range(perm_length):
+        for idx in range(perm_length-1, -1, -1):
+            # TODO: add early stop
+            worker_id = idx % self._num_workers
+            subgraph = graph.subgraph(perm[:idx + 1])
+            self._index_queues[worker_id].put((subgraph, min(subgraph.number_of_nodes(), self.max_cr_iteration), perm[idx]))
+        count = 0
+        results = []
+        while count != perm_length:
+            results.append(self._worker_result_queue.get(timeout=MP_STATUS_CHECK_INTERVAL))
+            count += 1
+        self._worker_result_queue.empty()
+        results = torch.tensor(results, dtype=torch.float32, requires_grad=False)
+        log_rep = torch.sum(torch.log(results))
+        return log_rep
+
+    def __call__(self, graph, params, device, M=1, nobfs=True, max_cr_iteration=10):
+        self.max_cr_iteration = max_cr_iteration
+        self.device = device
+        # perms = []
+        # log_probs = torch.empty(M, device=device)
+
+        # perm, log_prob = self.sample_legal_perm(graph, params)
+        log_reps = torch.empty(M)
+        perms = PlackettLuce(logits=params).sample(M)
+        log_probs = PlackettLuce(logits=params).log_prob(perms)
+        perms = perms.tolist()
+        for m in range(M):
+            if nobfs:
+                rep = self.compute_repetition(graph, perms[m])
+                log_reps[m].fill_(rep)
+            else:
+
+                # TODO: rewrite bfs sampler as a class function @Xu
+                pass
+        return perms, log_probs, log_reps
+
+    def _shutdown_workers(self):
+        if python_exit_status is True or python_exit_status is None:
+            return
+        self._workers_done_event.set()
+        for w in self._workers:
+            w.join(timeout=MP_STATUS_CHECK_INTERVAL)
+            if w.is_alive():
+                w.terminate()
+        for q in self._index_queues:
+            q.cancel_join_thread()
+            q.close()
+
+    def __del__(self):
+        self._shutdown_workers()
 
