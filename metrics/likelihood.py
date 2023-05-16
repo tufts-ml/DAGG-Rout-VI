@@ -38,7 +38,7 @@ def _get_log_likelihood(args, gs, model, record_len, sample_size):
 
     for i in range(sample_size):
         perms = _get_uniform_perm(record_len)
-        ll_p_m =  model(gs[i], perms)
+        ll_p_m =  -model(gs[i], perms)
         ll_p[:, i].copy_(ll_p_m)
 
 
