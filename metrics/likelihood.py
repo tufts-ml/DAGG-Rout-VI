@@ -34,7 +34,7 @@ def _get_log_likelihood(args, dataloader_test, p_model, q_model, record_len, sam
     ll_q = torch.empty((len(dataloader_test), args.sample_size), device=args.device)
     for id, graph in enumerate(dataloader_test):
         pis, log_q = q_model(graph, sample_size)
-        log_joint = -p_model(graph, pis)
+        log_joint = p_model(graph, pis)
         ll_p[id] = log_joint
         ll_q[id] = log_q
 

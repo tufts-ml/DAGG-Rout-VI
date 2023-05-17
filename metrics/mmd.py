@@ -1,12 +1,12 @@
-import os
-import random
-import shutil
-from statistics import mean
-import torch
-import numpy as np
-import pandas as pd
-from utils import get_model_attribute, load_graphs, save_graphs, get_last_checkpoint
-from models.DAGG.model import DAGG
+import third_party.stats
+
+def mmd(graph_ref_batch, graph_pred_batch):
+
+    batch_degree_mmd = thirdy_party.stats.degree_stats(graph_ref_batch, graph_pred_batch)
+    batch_clustering_mmd = thirdy_party.stats.clustering_stats(graph_ref_batch, graph_pred_batch)
+    batch_orbit_mmd = thirdy_party.stats.orbit_stats_all(graph_ref_batch, graph_pred_batch)
+
+    return  batch_degree_mmd, batch_clustering_mmd, batch_orbit_mmd
 
 
 

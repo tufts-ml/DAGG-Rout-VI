@@ -16,7 +16,6 @@ EPS = 1e-9
 
 
 class DAGG(nn.Module):
-    #TODO: add documentation 
     """
     This class defines the DAGG model, which is an autoregressive graph generative model. It has two main functions: likelihood 
     calculation and sampling. The first function computes the likelihood of a graph with given node orders, and the second 
@@ -186,9 +185,9 @@ class DAGG(nn.Module):
         swapped_loss = torch.empty_like(loss)
         swapped_loss[sort_indices] = loss
 
-        negative_log_like = swapped_loss 
+        log_like = - swapped_loss 
 
-        return negative_log_like
+        return log_like
 
     def sample(self, size, batch_size=32):
         '''

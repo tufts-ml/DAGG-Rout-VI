@@ -1,17 +1,19 @@
 import numpy as np
 import random
-import thirdy_party.stats
 from statistics import mean
 from metrics.likelihood import model_likelihood
+from metrics.mmd import mmd 
 import pandas as pd
 
 
 def evaluate(args, p_model, q_model, dataset_test):
     """
-     
+    This function evalutes the generative model by computing MMD metrics from 
+    generated graphs and its log-likelihood estimation over the test set. 
     """
     #generate graphs
     graphs = p_model.sample(args.count)
+
     graphs_test_indices = [i for i in range(len(dataset_test))]
 
     node_count_avg_ref, node_count_avg_pred = [], []
@@ -28,18 +30,19 @@ def evaluate(args, p_model, q_model, dataset_test):
 
         graphs_pred = graphs[i: i + batch_size]
 
+        # record basic statistics from test graphs and generated graphs
         node_count_avg_ref.append(mean([len(G.nodes()) for G in graphs_ref]))
         node_count_avg_pred.append(mean([len(G.nodes()) for G in graphs_pred]))
 
         edge_count_avg_ref.append(mean([len(G.edges()) for G in graphs_ref]))
         edge_count_avg_pred.append(mean([len(G.edges()) for G in graphs_pred]))
+
+        # compute mmd metrics
         batch_degree_mmd, batch_clustering_mmd, batch_orbit_mmd = mmd(graphs_ref, graphs_pred)
 
         degree_mmd.append(batch_degree_mmd)
         clustering_mmd.append(batch_clustering_mmd)
-
         orbit_mmd.append(batch_orbit_mmd)
-
 
 
     print('Evaluating {}, run at {}, epoch {}'.format(
@@ -49,30 +52,15 @@ def evaluate(args, p_model, q_model, dataset_test):
         node_count_avg_ref, node_count_avg_pred, edge_count_avg_ref, edge_count_avg_pred,
         degree_mmd, clustering_mmd, orbit_mmd)
 
-
-
     save_stats(
         node_count_avg_ref, node_count_avg_pred, edge_count_avg_ref,
         edge_count_avg_pred, degree_mmd, clustering_mmd, orbit_mmd, args)
-
 
 
     graph_likelihood = model_likelihood(args, p_model, q_model, dataset_test, args.sample_size)
 
     print('Estimated log likelihood per graph is:')
     print(graph_likelihood)
-
-
-
-
-def mmd(graph_ref_batch, graph_pred_batch):
-    batch_degree_mmd = thirdy_party.stats.degree_stats(graph_ref_batch, graph_pred_batch)
-    batch_clustering_mmd = thirdy_party.stats.clustering_stats(graph_ref_batch, graph_pred_batch)
-    batch_orbit_mmd = thirdy_party.stats.orbit_stats_all(graph_ref_batch, graph_pred_batch)
-
-
-
-    return  batch_degree_mmd, batch_clustering_mmd, batch_orbit_mmd
 
 
 def print_stats(

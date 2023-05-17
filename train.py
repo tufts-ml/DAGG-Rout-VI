@@ -12,7 +12,6 @@ from utils import save_model, load_model, get_model_attribute, get_last_checkpoi
 
 
 # Main training function
-# TODO: add documentation of this function
 
 def train(args, p_model, q_model, data_statistics, dataloader_train, dataloader_valid):
     """
@@ -114,8 +113,7 @@ def train_batch(args, p_model, q_model,optimizer, graph):
     # Evaluate model, get costs and log probabilities
     pis, pi_log_likelihood = q_model(graph, args.sample_size)
     
-    # TODO: need to return log joint
-    log_joint = -p_model(graph, pis)
+    log_joint = p_model(graph, pis)
 
     # for the gradient of q dist 
     fake_nll_q = -torch.mean(torch.mean((log_joint.detach() - pi_log_likelihood.detach()) * pi_log_likelihood))
@@ -152,7 +150,7 @@ def validate_elbo(args, p_model, q_model, dataloader_validate):
 
             log_likelihood, pis = q_model(graphs, args.sample_size, return_pi=True)
 
-            log_joint = -p_model(graphs, pis)
+            log_joint = p_model(graphs, pis)
             elbo = -torch.mean(log_joint.detach() - log_likelihood.detach())
             total_elbo = total_elbo + elbo
 
