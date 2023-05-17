@@ -1,59 +1,52 @@
 import numpy as np
 import pickle
 import torch
+from torch.utils.data import DataLoader
+from data import NumpyTupleDataset
 
 
 
-def model_likelihood(args, model, graphs_indices, sample_size):
+def model_likelihood(args, p_model, q_model, graphs, sample_size):
     '''
     This function is to estimate likehood of the given graphs with DAGG.
+    Args:
+            p_model: nn.Module, generative model
+            q_model: nn.Module, order_model
+            graphs: [nx.graph()]
+
+        Return:
+
+            pg: Tensor, estiamted log-likelihodd for the graphs
     '''
-    graphs=[]
-    fact_nodes_number=[]
-    #load test graphs
 
+    dataloader_test= DataLoader(graphs, batch_size=1, shuffle=False, drop_last=False,
+        num_workers=args.num_workers, collate_fn=NumpyTupleDataset.collate_batch)
 
-    for ind in graphs_indices:
-        with open(args.current_graphs_save_path + 'graph' + str(ind) + '.dat', 'rb') as f:
-            g = pickle.load(f)
-            graphs.append(g)
-            fact_nodes_number.append(np.math.factorial(g.number_of_nodes()))
-
-    record_len = [g.number_of_nodes() for g in graphs]
-
-    llg= _get_log_likelihood(args, graphs, model, record_len, sample_size)
-    mpg = _statistic(llg)
-    pg = mpg * fact_nodes_number
-    print('Estimated probability is:')
-    print(pg)
+    llg= _get_log_likelihood(args, dataloader_test, p_model, q_model, sample_size)
+    pg = _statistic(llg)
 
     return pg
 
 
-def _get_log_likelihood(args, gs, model, record_len, sample_size):
-    len_g = len(gs)
-    ll_p = torch.empty((len_g, args.sample_size), device=args.device)
+def _get_log_likelihood(args, dataloader_test, p_model, q_model, record_len, sample_size):
 
-
-
-    for i in range(sample_size):
-        perms = _get_uniform_perm(record_len)
-        ll_p_m =  model(gs[i], perms)
-        ll_p[:, i].copy_(ll_p_m)
-
-
+    ll_p = torch.empty((len(dataloader_test), args.sample_size), device=args.device)
+    ll_q = torch.empty((len(dataloader_test), args.sample_size), device=args.device)
+    for id, graph in enumerate(dataloader_test):
+        pis, log_q = q_model(graph, sample_size)
+        log_joint = -p_model(graph, pis)
+        ll_p[id] = log_joint
+        ll_q[id] = log_q
 
     return ll_p
 
 
-def _get_uniform_perm(record_len):
-    return [np.array(torch.randperm(n)) for n in record_len]
 
 
-def _statistic(llg):
+def _statistic(ll_p,ll_q):
 
-    mtllg = torch.logsumexp(llg, 1)-torch.empty(llg.shape[0]).fill_(torch.log(llg.shape[1]))
-    return np.array(torch.exp(mtllg))
+    mllp = torch.logsumexp(ll_p-ll_q, 1) +torch.log(1/ll_q.size()[1])
+    return mllp
 
 
 

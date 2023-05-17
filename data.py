@@ -225,7 +225,7 @@ class NumpyTupleDataset(Dataset):
 
 
 def create_dataset(args):
-    # graphs = create_graphs(args)[:100] # for implementation test
+
     graphs = create_graphs(args)
 
     # Loading the feature map
@@ -258,26 +258,28 @@ def create_dataset(args):
     random.shuffle(graphs)
     graphs_train = graphs[: int(0.80 * len(graphs))]
     graphs_validate = graphs[int(0.80 * len(graphs)): int(0.90 * len(graphs))]
+    graphs_test = graphs[int(0.90 * len(graphs)): ]
+
     # show graphs statistics
-    print('Model:', 'DAGG')
     print('Device:', args.device)
     print('Graph type:', args.dataset)
     print('Training set: {}, Validation set: {}'.format(
         len(graphs_train), len(graphs_validate)))
 
-    if args.dataset in ['zinc', 'qm9']:
-        dataset = NumpyTupleDataset.load(args.current_dataset_path, graphs, feature_map)
-        dataset_train = torch.utils.data.Subset(dataset, graphs_train)  # 120,803
-        dataset_validate = torch.utils.data.Subset(dataset, graphs_validate)
+#    if args.dataset in ['zinc', 'qm9']:
+#        dataset = NumpyTupleDataset.load(args.current_dataset_path, graphs, feature_map)
+#        dataset_train = torch.utils.data.Subset(dataset, graphs_train)  # 120,803
+#        dataset_validate = torch.utils.data.Subset(dataset, graphs_validate)
+
+    dataset_train = Graph_from_file(args, graphs_train, feature_map)
+    dataset_validate = Graph_from_file(args, graphs_validate, feature_map)
+    dataset_test = Graph_from_file(args, graphs_test, feature_map)
+
+    if args.task == "train":
+        return dataset_train, dataset_validate, feature_map
+
+    elif args.task == "test":
+        return dataset_test, feature_map
+    
     else:
-
-        dataset_train = Graph_from_file(args, graphs_train, feature_map)
-        dataset_validate = Graph_from_file(args, graphs_validate, feature_map)
-
-    dataloader_train = DataLoader(
-        dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
-        num_workers=args.num_workers, collate_fn=NumpyTupleDataset.collate_batch)
-    dataloader_validate = DataLoader(
-        dataset_validate, batch_size=args.batch_size, shuffle=False, drop_last=True,
-        num_workers=args.num_workers, collate_fn=NumpyTupleDataset.collate_batch)
-    return dataloader_train, dataloader_validate, feature_map
+        raise Exception("No such task in args.task: " + str(args.task))

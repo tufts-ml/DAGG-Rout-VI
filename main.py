@@ -9,7 +9,8 @@ from models.Rout.model import Rout
 from data import create_dataset
 from train import train
 from evaluate import evaluate
-
+from torch.utils.data import DataLoader
+from data import NumpyTupleDataset
 
 if __name__ == '__main__':
 
@@ -24,7 +25,17 @@ if __name__ == '__main__':
     if args.task == "train":
 
         # prepare the data
-        dataloader_train, dataloader_validate, data_statistics = create_dataset(args)
+
+        dataset_train, dataset_validate, data_statistics = create_dataset(args)
+
+        dataloader_train = DataLoader(
+            dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
+            num_workers=args.num_workers, collate_fn=NumpyTupleDataset.collate_batch)
+
+        dataloader_validate = DataLoader(
+            dataset_validate, batch_size=args.batch_size, shuffle=False, drop_last=True,
+            num_workers=args.num_workers, collate_fn=NumpyTupleDataset.collate_batch)
+
 
         # save args
         with open(os.path.join(args.experiment_path, "configuration.txt"), 'w') as f:
@@ -42,16 +53,16 @@ if __name__ == '__main__':
     elif args.task == "evaluate":
 
 
-
         # load the p and q models
         p_model,qmodel = load_model(args, args.eval_epoch)
 
 
+        # load test set, args.task needs to be "test" 
+        dataset_test, data_statistics = create_dataset(args)
+
         # compute MMD values from multiple graphs statistics 
         # compute the approximate log-likelihood from importance sampling
-        evaluate(args, p_model)
-
-
+        evaluate(args, p_model, qmodel, dataset_test)
 
     else:
 
