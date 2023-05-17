@@ -11,7 +11,7 @@ def model_likelihood(args, p_model, q_model, graphs, sample_size):
     This function is to estimate likehood of the given graphs with DAGG.
     Args:
             p_model: nn.Module, generative model
-            q_model: nn.Module, order_model
+            q_model: nn.Module, inference model
             graphs: [nx.graph()]
 
         Return:
