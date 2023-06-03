@@ -2,6 +2,10 @@ import numpy as np
 import pyemd
 from scipy.linalg import toeplitz
 from sklearn.metrics.pairwise import pairwise_kernels
+
+import sys
+sys.path.insert(0,'third_party')
+
 from eden.graph import vectorize
 
 

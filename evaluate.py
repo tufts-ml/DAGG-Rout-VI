@@ -2,7 +2,7 @@ import numpy as np
 import random
 from statistics import mean
 from metrics.likelihood import model_likelihood
-from metrics.mmd import mmd 
+from metrics.stats_mmd import mmd 
 import pandas as pd
 
 

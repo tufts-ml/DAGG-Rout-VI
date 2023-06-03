@@ -1,4 +1,4 @@
-import third_party.stats
+from third_party import stats
 
 def mmd(graph_ref_batch, graph_pred_batch):
 
