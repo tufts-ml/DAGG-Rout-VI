@@ -8,46 +8,6 @@ import numpy as np
 
 
 
-def mkdir(path):
-    if os.path.isdir(path):
-        is_del = input('Delete ' + path + ' Y/N:')
-        if is_del.strip().lower() == 'y':
-            shutil.rmtree(path)
-        else:
-            exit()
-
-    os.makedirs(path)
-
-
-def load_graphs(graphs_path, graphs_indices=None):
-    """
-    Returns a list of graphs given graphs directory and graph indices (Optional)
-    If graphs_indices are not provided all graphs will be loaded
-    """
-
-    graphs = []
-    if graphs_indices is None:
-        for name in os.listdir(graphs_path):
-            if not name.endswith('.dat'):
-                continue
-
-            with open(graphs_path + name, 'rb') as f:
-                graphs.append(pickle.load(f))
-    else:
-        for ind in graphs_indices:
-            with open(graphs_path + 'graph' + str(ind) + '.dat', 'rb') as f:
-                graphs.append(pickle.load(f))
-
-    return graphs
-
-
-def save_graphs(graphs_path, graphs):
-    """
-    Save networkx graphs to a directory with indexing starting from 0
-    """
-    for i in range(len(graphs)):
-        with open(graphs_path + 'graph' + str(i) + '.dat', 'wb') as f:
-            pickle.dump(graphs[i], f)
 
 
 # Create Directories for outputs

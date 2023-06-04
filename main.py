@@ -1,5 +1,6 @@
 import random
-import os, json
+import os 
+import json
 import torch
 import numpy as np
 from args import Args
@@ -26,7 +27,7 @@ if __name__ == '__main__':
 
         # prepare the data
 
-        dataset_train, dataset_validate, data_statistics = create_dataset(args)
+        dataset_train, dataset_validate = create_dataset(args)
 
         dataloader_train = DataLoader(
             dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
@@ -42,13 +43,13 @@ if __name__ == '__main__':
             json.dump(args.__dict__, f, indent=2)
 
         # the autoregressive graph generative model
-        p_model = DAGG(args, data_statistics).to(args.device)
+        p_model = DAGG(args, dataset_train.statistics).to(args.device)
 
         # the q distributions of node orders given training graphs  
-        q_model = Rout(args, data_statistics).to(args.device)
+        q_model = Rout(args, dataset_train.statistics).to(args.device)
 
         # minimize the variational lower bounds of training graphs under the p model
-        train(args, p_model, q_model, data_statistics, dataloader_train, dataloader_validate)
+        train(args, p_model, q_model, dataset_train.statistics, dataloader_train, dataloader_validate)
         
     elif args.task == "evaluate":
 
@@ -58,7 +59,7 @@ if __name__ == '__main__':
 
 
         # load test set, args.task needs to be "test" 
-        dataset_test, data_statistics = create_dataset(args)
+        dataset_test = create_dataset(args)
 
         # compute MMD values from multiple graphs statistics 
         # compute the approximate log-likelihood from importance sampling

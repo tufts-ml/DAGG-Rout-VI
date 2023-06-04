@@ -9,7 +9,7 @@ import numpy as np
 import networkx as nx
 import pandas as pd
 from torch.utils.data import DataLoader
-from datasets.process_dataset import create_graphs
+from datasets.process_dataset import load_graph_dataset
 from datasets.preprocess import calc_max_prev_node
 
 class Graph_from_file(Dataset):
@@ -226,60 +226,36 @@ class NumpyTupleDataset(Dataset):
 
 def create_dataset(args):
 
-    graphs = create_graphs(args)
+    graph_dataset = load_graph_dataset(args)
 
-    # Loading the feature map
-    with open(args.current_processed_dataset_path + 'map.dict', 'rb') as f:
-        feature_map = pickle.load(f)
+    #if args.nobfs:
+    #    args.max_prev_node = feature_map['max_nodes'] - 1
+    #if args.max_prev_node is None:
+    #    args.max_prev_node = calc_max_prev_node(args.current_processed_dataset_path)
 
-    print('Max number of nodes: {}'.format(feature_map['max_nodes']))
-    print('Max number of edges: {}'.format(feature_map['max_edges']))
-    print('Min number of nodes: {}'.format(feature_map['min_nodes']))
-    print('Min number of edges: {}'.format(feature_map['min_edges']))
-    print('Max degree of a node: {}'.format(feature_map['max_degree']))
-    print('No. of node labels: {}'.format(len(feature_map['node_forward'])))
-    print('No. of edge labels: {}'.format(len(feature_map['edge_forward'])))
-    print(args.__dict__)
+    #args.max_head_and_tail = None
+    #print('max_prev_node:', args.max_prev_node)
+
+    #random.shuffle(graphs)
+    #graphs_train = graphs[: int(0.80 * len(graphs))]
+    #graphs_validate = graphs[int(0.80 * len(graphs)): int(0.90 * len(graphs))]
+    #graphs_test = graphs[int(0.90 * len(graphs)): ]
 
 
-    start = time.time()
-    if args.nobfs:
-        args.max_prev_node = feature_map['max_nodes'] - 1
-    if args.max_prev_node is None:
-        args.max_prev_node = calc_max_prev_node(args.current_processed_dataset_path)
-
-    args.max_head_and_tail = None
-    print('max_prev_node:', args.max_prev_node)
-
-    end = time.time()
-    print('Time taken to calculate max_prev_node = {:.3f}s'.format(
-        end - start))
-
-    random.shuffle(graphs)
-    graphs_train = graphs[: int(0.80 * len(graphs))]
-    graphs_validate = graphs[int(0.80 * len(graphs)): int(0.90 * len(graphs))]
-    graphs_test = graphs[int(0.90 * len(graphs)): ]
+    dataset_train, dataset_validate, dataset_test = dgl.data.utils.split_dataset(graph_dataset, frac_list=[0.8, 0.1, 0.1])
 
     # show graphs statistics
+
+
     print('Device:', args.device)
     print('Graph type:', args.dataset)
-    print('Training set: {}, Validation set: {}'.format(
-        len(graphs_train), len(graphs_validate)))
 
-#    if args.dataset in ['zinc', 'qm9']:
-#        dataset = NumpyTupleDataset.load(args.current_dataset_path, graphs, feature_map)
-#        dataset_train = torch.utils.data.Subset(dataset, graphs_train)  # 120,803
-#        dataset_validate = torch.utils.data.Subset(dataset, graphs_validate)
-
-    dataset_train = Graph_from_file(args, graphs_train, feature_map)
-    dataset_validate = Graph_from_file(args, graphs_validate, feature_map)
-    dataset_test = Graph_from_file(args, graphs_test, feature_map)
 
     if args.task == "train":
-        return dataset_train, dataset_validate, feature_map
+        return dataset_train, dataset_validate
 
     elif args.task == "test":
-        return dataset_test, feature_map
+        return dataset_test
     
     else:
         raise Exception("No such task in args.task: " + str(args.task))
