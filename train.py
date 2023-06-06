@@ -13,14 +13,13 @@ from utils import save_model, load_model, get_model_attribute, get_last_checkpoi
 
 # Main training function
 
-def train(args, p_model, q_model, data_statistics, dataloader_train, dataloader_valid):
+def train(args, p_model, q_model, dataloader_train, dataloader_valid):
     """
     maximize the elbo using `p_model` as the generative model $p(A)$ and `q_model` as the inference model $p(\pii | G)$ 
     Args:
        args:
        p_model: nn.Module, the generative model
        q_model: nn.Module, the inference model
-       data_statistics: dict
        dataloader_train: Dataloader
        dataloader_valid: Dataloader
         
@@ -86,12 +85,13 @@ def train_epoch(args, p_model, q_model, dataloader_train, optimizer, log_history
         st = time.time()
 
         elbo = train_batch(args, p_model, q_model, optimizer, graphs)
+
         total_loss = total_loss + elbo
 
         spent = time.time() - st
 
-        if batch_id % args.print_interval == 0:
-            print('epoch {} batch {}: elbo is {}, time spent is {}.'.format(epoch, batch_id, elbo,spent), flush=True)
+        #if batch_id % args.print_interval == 0:
+        #    print('epoch {} batch {}: elbo is {}, time spent is {}.'.format(epoch, batch_id, elbo,spent), flush=True)
 
         log_history['batch_elbo'].append(elbo)
         log_history['batch_time'].append(spent)

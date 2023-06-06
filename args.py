@@ -85,7 +85,7 @@ class Args:
 
         # Training config
         self.parser.add_argument('--batch_size', type=int, default=1, help='batchsize')
-        self.parser.add_argument('--num_workers', type=int, default=8, help='number of workers for dataloader')
+        self.parser.add_argument('--num_workers', type=int, default=1, help='number of workers for dataloader')
         self.parser.add_argument('--epochs', type=int, default=200, help='epochs')
 
         self.parser.add_argument('--lr', type=float, default=0.001, help='learning rate')

@@ -7,7 +7,8 @@ from dgl.nn.pytorch import GraphConv
 
 
 
-msg = fn.copy_src(src='h', out='m')
+def message_func(edges):
+    return {'m': edges.src['h']}
 
 
 def reduce(nodes):
@@ -55,7 +56,7 @@ class GCNLayer(nn.Module):
 
         if self.dgl_builtin == False:
             g.ndata['h'] = feature
-            g.update_all(msg, reduce)
+            g.update_all(message_func, reduce)
             g.apply_nodes(func=self.apply_mod)
             h = g.ndata['h']  # result of graph convolution
         else:

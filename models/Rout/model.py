@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import dgl
 import math
 from typing import NamedTuple
 from models.Rout.generation import generation
@@ -76,7 +77,7 @@ class Rout(nn.Module):
         self.project_out = nn.Linear(self.embedding_dim, self.embedding_dim, bias=False)
 
 
-    def forward(self, g, n_samples):
+    def forward(self, graphs, n_samples):
         """
         This function samples `n_samples` of node orders from this q distribution and returns their log-likelihoods 
 
@@ -88,10 +89,17 @@ class Rout(nn.Module):
             ll: Tensor, log-likelihodd for the pi
         """
 
-        g=g[0]['dG'].to(self.args.device)
+        g = dgl.from_networkx(graphs[0], idtype=torch.int64, device=self.args.device)
+
+        #print("g device: ", g.device)
+
         embeddings = self.add_PE(g)
+
+        #print("embeddings device:", embeddings.device()) 
+
         embeddings = self.gnn(g, embeddings)
         embeddings = embeddings.repeat(n_samples, 1, 1)
+
 
         edges = g.edges()
         edge_index = torch.stack(edges)
@@ -116,6 +124,7 @@ class Rout(nn.Module):
 
         num_nodes = data.num_nodes()
         edges = data.edges()
+
         edge_index = torch.stack(edges)
         edge_index, edge_weight = get_laplacian(
             edge_index,
@@ -134,7 +143,9 @@ class Rout(nn.Module):
         eig_vecs = np.real(eig_vecs[:, eig_vals.argsort()])
         pe = torch.from_numpy(eig_vecs[:, 1:k + 1])
         sign = -1 + 2 * torch.randint(0, 2, (k,))
+
         pe *= sign
+
         return pe.to(edge_index.device)
 
 

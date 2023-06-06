@@ -29,6 +29,8 @@ def load_graph_dataset(args):
                 for j in range(6, 11):
                     for k in range(100):
                         graph = caveman_special(i, j, p_edge=0.8) # default 0.8
+
+                        # TODO: remove it to better support a choice that do not have node/edge labels
                         default_label_graph(graph)
                         graphs.append(graph)
             
@@ -51,6 +53,7 @@ def load_graph_dataset(args):
 
         # TODO: setting args entries in args.py
         args.max_prev_node = 20
+        args.max_head_and_tail = None
     
     else: 
         raise Exception(f"This dataset is not provided by this repo: {args.dataset}")
@@ -59,9 +62,21 @@ def load_graph_dataset(args):
 
 
 
-class GraphListDataset(torch.utils.data.IterableDataset):
+class GraphListDataset(torch.utils.data.Dataset):
+
+    """
+    Get a list of graphs and create a dataset of DGL graphs
+    """
 
     def __init__(self, graph_list):
+        """
+        Initialize the graph dataset. It will replace labels to integers using a global dictinary.  
+
+        args:
+            graph_list: a list of networkx graphs
+        """
+
+    
         super(GraphListDataset).__init__()
 
         if len(graph_list) == 0:
@@ -70,16 +85,13 @@ class GraphListDataset(torch.utils.data.IterableDataset):
         # record the list
         self.graph_list = graph_list
 
-        # get simple statistics
-        self.statistics = self._get_statistics()
-
         # mapping string labels to integers
         self.node_label_list = self._map_node_labels()
         self.edge_label_list = self._map_edge_labels()
 
 
-    def __iter__(self):
-        return iter(self.graph_list)
+    def __getitem__(self, index):
+        return self.graph_list[index]
 
     def __len__(self):
         return len(self.graph_list)
@@ -143,24 +155,38 @@ class GraphListDataset(torch.utils.data.IterableDataset):
 
 
 
-    def _get_statistics(self):
+def get_data_statistics(dataset):
+    """
+    Compute data statistics for a dataset. 
 
-        graph = self.graph_list[0]
-        statistics = dict(max_num_nodes=graph.number_of_nodes(), 
-                          min_num_nodes=graph.number_of_nodes(), 
-                          max_num_edges=graph.number_of_edges(), 
-                          min_num_edges=graph.number_of_edges())
+    args: 
+        dataset: a graph dataset  
 
-       
-        for graph in self.graph_list: 
+    returns: 
+        statistics: a dictionary containing data statistics
+    """
 
-            statistics["max_num_nodes"] = max(statistics["max_num_nodes"], graph.number_of_nodes())
-            statistics["min_num_nodes"] = min(statistics["min_num_nodes"], graph.number_of_nodes())
- 
-            statistics["max_num_edges"] = max(statistics["max_num_edges"], graph.number_of_edges())
-            statistics["min_num_edges"] = min(statistics["min_num_edges"], graph.number_of_edges())
+    statistics = dict()
 
-        return statistics 
+    statistics["num_node_labels"] = len(dataset.node_label_list)
+    statistics["num_edge_labels"] = len(dataset.edge_label_list)
+
+    graph = dataset[0]
+    statistics["max_num_nodes"]=graph.number_of_nodes() 
+    statistics["min_num_nodes"]=graph.number_of_nodes() 
+    statistics["max_num_edges"]=graph.number_of_edges() 
+    statistics["min_num_edges"]=graph.number_of_edges()
+
+   
+    for graph in dataset: 
+
+        statistics["max_num_nodes"] = max(statistics["max_num_nodes"], graph.number_of_nodes())
+        statistics["min_num_nodes"] = min(statistics["min_num_nodes"], graph.number_of_nodes())
+
+        statistics["max_num_edges"] = max(statistics["max_num_edges"], graph.number_of_edges())
+        statistics["min_num_edges"] = min(statistics["min_num_edges"], graph.number_of_edges())
+
+    return statistics 
 
 
 

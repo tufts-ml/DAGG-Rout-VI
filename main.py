@@ -1,41 +1,44 @@
-import random
 import os 
 import json
-import torch
 import numpy as np
+import torch
+import dgl
 from args import Args
 from utils import create_dirs,load_model
 from models.DAGG.model import DAGG
 from models.Rout.model import Rout
-from data import create_dataset
 from train import train
 from evaluate import evaluate
-from torch.utils.data import DataLoader
-from data import NumpyTupleDataset
+import datasets.process_dataset as gdata
 
 if __name__ == '__main__':
-
 
     # preparation for model traing 
     args = Args()
     args = args.update_args()
     create_dirs(args)
     torch.manual_seed(args.seed)
-    np.random.seed(0)
+    np.random.seed(args.seed)
+
+
+    graph_dataset = gdata.load_graph_dataset(args)
+    data_statistics = gdata.get_data_statistics(graph_dataset)
+
+
+    dataset_train, dataset_validate, dataset_test = dgl.data.utils.split_dataset(graph_dataset, frac_list=[0.8, 0.1, 0.1])
+
 
     if args.task == "train":
 
         # prepare the data
 
-        dataset_train, dataset_validate = create_dataset(args)
-
-        dataloader_train = DataLoader(
+        dataloader_train = torch.utils.data.DataLoader(
             dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
-            num_workers=args.num_workers, collate_fn=NumpyTupleDataset.collate_batch)
+            num_workers=args.num_workers, collate_fn=lambda _: _)
 
-        dataloader_validate = DataLoader(
+        dataloader_validate = torch.utils.data.DataLoader(
             dataset_validate, batch_size=args.batch_size, shuffle=False, drop_last=True,
-            num_workers=args.num_workers, collate_fn=NumpyTupleDataset.collate_batch)
+            num_workers=args.num_workers, collate_fn=lambda _: _)
 
 
         # save args
@@ -43,13 +46,13 @@ if __name__ == '__main__':
             json.dump(args.__dict__, f, indent=2)
 
         # the autoregressive graph generative model
-        p_model = DAGG(args, dataset_train.statistics).to(args.device)
+        p_model = DAGG(args, data_statistics).to(args.device)
 
         # the q distributions of node orders given training graphs  
-        q_model = Rout(args, dataset_train.statistics).to(args.device)
+        q_model = Rout(args, data_statistics).to(args.device)
 
         # minimize the variational lower bounds of training graphs under the p model
-        train(args, p_model, q_model, dataset_train.statistics, dataloader_train, dataloader_validate)
+        train(args, p_model, q_model, dataloader_train, dataloader_validate)
         
     elif args.task == "evaluate":
 

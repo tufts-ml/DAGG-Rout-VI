@@ -26,15 +26,22 @@ class DAGG(nn.Module):
 
         self.args = args
         self.data_statistics = data_statistics
+
         self.processor = Graph_to_Adj_Matrix(args, data_statistics)
+
         #args.feature_len = self.processor.feature_len
-        len_node_vec, len_edge_vec, num_nodes_to_consider = get_attributes_len_for_graph_rnn(len(
-            data_statistics['node_forward']), len(data_statistics['edge_forward']), args.max_prev_node, args.max_head_and_tail)
+        len_node_vec, len_edge_vec, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
+            data_statistics['num_node_labels'], data_statistics['num_edge_labels'],
+            args.max_prev_node, args.max_head_and_tail)
+
+        self.len_node_vec = len_node_vec
+        self.len_edge_vec = len_edge_vec
+        self.num_nodes_to_consider = num_nodes_to_consider
 
 
         self.node_level_transformer = AttentionDecoder(args.embedding_size_node_level_transformer, n_head=4)
         self.edge_level_transformer= AttentionDecoder(args.embedding_size_edge_level_transformer, n_head=4)
-        self.data_statistics = data_statistics
+
         self.embedding_node_to_edge = MLP_Plain(
             input_size=args.hidden_size_node_level_transformer, embedding_size=args.embedding_size_node_level_transformer,
             output_size=args.hidden_size_edge_level_transformer).to(device=args.device)
@@ -46,12 +53,13 @@ class DAGG(nn.Module):
 
 
         feature_len = len_node_vec + num_nodes_to_consider * len_edge_vec
+
         self.node_project =  MLP_Plain(feature_len, args.embedding_size_node_level_transformer, args.embedding_size_node_level_transformer)
         self.edge_project =  MLP_Plain(len_edge_vec, args.embedding_size_edge_level_transformer, args.embedding_size_edge_level_transformer)
 
 
     # probability calculation
-    def forward(self, g, pis):
+    def forward(self, graphs, pis):
         '''
         The forward function computes the log-likelihood of the given graph using given node orders. 
 
@@ -62,7 +70,7 @@ class DAGG(nn.Module):
         Return: negative log-likelihodd of the given graph using `k` node permutations 
         '''
 
-        data = [self.processor(g, perms) for perms in pis]
+        data = [self.processor(graphs[0], perms) for perms in pis]
         data = collate(data)
 
         x_unsorted = data['x'].to(self.args.device)
@@ -71,9 +79,9 @@ class DAGG(nn.Module):
         x_len_max = max(x_len_unsorted)
         x_unsorted = x_unsorted[:, 0:max(x_len_unsorted), :]
 
-        len_node_vec, len_edge_vec, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
-            len(self.data_statistics['node_forward']), len(self.data_statistics['edge_forward']),
-            self.args.max_prev_node, self.args.max_head_and_tail)
+        len_node_vec          = self.len_node_vec          
+        len_edge_vec          = self.len_edge_vec          
+        num_nodes_to_consider = self.num_nodes_to_consider 
 
         batch_size = x_unsorted.size(0)
         # sort input for packing variable length sequences
@@ -85,6 +93,7 @@ class DAGG(nn.Module):
         # Start token for graph level Transformer decoder is node feature second last bit is 1
         node_level_input = torch.cat(
             (torch.zeros(batch_size, 1, x.size(2), device=self.args.device), x), dim=1)
+
         node_level_input[:, 0, len_node_vec - 2] = 1
         steps = x.size(1)
 
@@ -199,12 +208,14 @@ class DAGG(nn.Module):
         Return: a list [g1,g2,.....] of `size` graph samples
         '''
 
-        max_num_node = self.data_statistics.max_num_node
-        min_num_node = self.data_statistics.min_num_node
+        max_num_node = self.data_statistics["max_num_nodes"]
+        min_num_node = self.data_statistics["min_num_nodes"]
 
-        len_node_vec, len_edge_vec, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
-            len(self.data_statistics['node_forward']), len(self.data_statistics['edge_forward']),
-            self.args.max_prev_node, self.args.max_head_and_tail)
+        len_node_vec          = self.len_node_vec          
+        len_edge_vec          = self.len_edge_vec          
+        num_nodes_to_consider = self.num_nodes_to_consider 
+
+
         feature_len = len_node_vec + num_nodes_to_consider * len_edge_vec
 
         graphs = []
@@ -294,16 +305,15 @@ class DAGG(nn.Module):
                     # End node token
                     if x_pred_node[k, v] == len_node_vec - 1:
                         break
-                    elif x_pred_node[k, v] < len(self.data_statistics['node_forward']):
+                    elif x_pred_node[k, v] < self.data_statistics['num_node_labels']:
                         G.add_node(
-                            v, label=self.data_statistics['node_backward'][x_pred_node[k, v]])
+                            v, label=x_pred_node[k, v])
                     else:
-                        print('Error in sampling node features')
-                        exit()
+                        raise('Error in sampling node features')
 
                 for u in range(len(G.nodes())):
                     for p in range(min(num_nodes_to_consider, u)):
-                        if x_pred_edge[k, u, p] < len(self.data_statistics['edge_forward']):
+                        if x_pred_edge[k, u, p] < self.data_statistics['num_edge_labels']:
                             if self.args.max_prev_node is not None:
                                 v = u - p - 1
                             elif self.args.max_head_and_tail is not None:
@@ -313,13 +323,12 @@ class DAGG(nn.Module):
                                     v = p - self.args.max_head_and_tail[1]
 
                             G.add_edge(
-                                u, v, label=self.data_statistics['edge_backward'][x_pred_edge[k, u, p]])
-                        elif x_pred_edge[k, u, p] == len(self.data_statistics['edge_forward']):
+                                u, v, label=x_pred_edge[k, u, p])
+                        elif x_pred_edge[k, u, p] == self.data_statistics['num_edge_labels']:
                             # No edge
                             pass
                         else:
-                            print('Error in sampling edge features')
-                            exit()
+                            raise('Error in sampling edge features')
 
                 # Take maximum connected component
                 if len(G.nodes()):
@@ -333,41 +342,53 @@ class DAGG(nn.Module):
 
 class Graph_to_Adj_Matrix:
     def __init__(self, args, data_statistics):
+
         print('Generating adj matrix...')
-        self.data_statistics= data_statistics
         # No. of previous nodes to consider for edge prediction
         self.max_prev_node = args.max_prev_node
         # Head and tail of adjacency vector to consider for edge prediction
         self.max_head_and_tail = args.max_head_and_tail
 
         if self.max_prev_node is None and self.max_head_and_tail is None:
-            print('Please provide max_prev_node or max_head_and_tail')
-            exit()
+            raise Exception('Please provide max_prev_node or max_head_and_tail')
 
-        self.max_nodes = data_statistics['max_nodes']
+        self.data_statistics = data_statistics
+
+
         len_node_vec, len_edge_vec, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
-            len(data_statistics['node_forward']), len(data_statistics['edge_forward']),
+            data_statistics['num_node_labels'], data_statistics['num_edge_labels'],
             self.max_prev_node, self.max_head_and_tail)
+
+        self.len_node_vec = len_node_vec
+        self.len_edge_vec = len_edge_vec
+        self.num_nodes_to_consider = num_nodes_to_consider
+
         self.feature_len = len_node_vec + num_nodes_to_consider * len_edge_vec
 
     def __call__(self, graph, perm=None):
         # TODO given a graph and permutation, return an adj matrix, i.e., reimplement Graph_Adj_Matrix_from_file.__getitem__
-        graph = graph[0]['G']
 
-        x_item = torch.zeros((self.max_nodes, self.feature_len))
+        x_item = torch.zeros((self.data_statistics["max_num_nodes"], self.feature_len))
 
-        adj_feature_mat = self.graph_to_matrix(graph, self.data_statistics['node_forward'], self.data_statistics['edge_forward'], perm)
+        adj_feature_mat = self.graph_to_matrix(graph, perm)
 
         x_item[0:adj_feature_mat.shape[0], :adj_feature_mat.shape[1]] = adj_feature_mat
 
         return {'x': x_item, 'len': len(adj_feature_mat)}
 
-    def graph_to_matrix(self, in_graph, node_map, edge_map, perm):
+
+    # note that the graph should only have integer labels by now. 
+    def graph_to_matrix(self, in_graph, perm):
 
 
         n = len(in_graph.nodes())
-        len_node_vec, _, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
-            len(node_map), len(edge_map), self.max_prev_node, self.max_head_and_tail)
+
+        #len_node_vec, _, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
+        #    len(node_map), len(edge_map), self.max_prev_node, self.max_head_and_tail)
+        
+        len_node_vec          = self.len_node_vec           
+        num_nodes_to_consider = self.num_nodes_to_consider 
+
 
         # TODO: examine the permutation is legal
         seq = perm
@@ -381,29 +402,29 @@ class Graph_to_Adj_Matrix:
         # 3D adjacecny matrix in case of edge_features (each A[i, j] is a len_edge_vec size vector)
         adj_mat_2d = torch.ones((n, num_nodes_to_consider))
         adj_mat_2d.tril_(diagonal=-1)
-        adj_mat_3d = torch.zeros((n, num_nodes_to_consider, len(edge_map)))
+        adj_mat_3d = torch.zeros((n, num_nodes_to_consider, self.data_statistics["num_edge_labels"]))
 
         node_mat = torch.zeros((n, len_node_vec))
 
         for v, data in graph.nodes.data():
-            ind = node_map[data['label']]
+            ind = data['label']
             node_mat[v, ind] = 1
 
         for u, v, data in graph.edges.data():
             if self.max_prev_node is not None:
                 if abs(u - v) <= self.max_prev_node:
                     adj_mat_3d[max(u, v), max(u, v) - min(u, v) -
-                               1, edge_map[data['label']]] = 1
+                               1, data['label']] = 1
                     adj_mat_2d[max(u, v), max(u, v) - min(u, v) - 1] = 0
 
             elif self.max_head_and_tail is not None:
                 if abs(u - v) <= self.max_head_and_tail[1]:
                     adj_mat_3d[max(u, v), max(u, v) - min(u, v) -
-                               1, edge_map[data['label']]] = 1
+                               1, data['label']] = 1
                     adj_mat_2d[max(u, v), max(u, v) - min(u, v) - 1] = 0
                 elif min(u, v) < self.max_head_and_tail[0]:
                     adj_mat_3d[max(u, v), self.max_head_and_tail[1] +
-                               min(u, v), edge_map[data['label']]] = 1
+                               min(u, v), data['label']] = 1
                     adj_mat_2d[max(u, v), self.max_head_and_tail[1] + min(u, v)] = 0
 
         adj_mat = torch.cat((adj_mat_3d, adj_mat_2d.reshape(adj_mat_2d.size(
