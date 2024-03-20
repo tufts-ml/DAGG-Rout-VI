@@ -39,7 +39,7 @@ class Args:
         self.parser.add_argument('--n_ctx', type=int, default=401, help='?')
         self.parser.add_argument('--n_embd', type=int, default=512, help='node embedding dimension')
         self.parser.add_argument('--layer_norm_epsilon', type=float, default=1e-5, help='cd gralayer_norm_epsilon')
-        self.parser.add_argument('--n_layer', type=float, default=4, help='layer of attention')
+        self.parser.add_argument('--n_layer', type=float, default=2, help='layer of attention')
         self.parser.add_argument('--withz', default=False, help='use z or not')
         self.parser.add_argument('--embd_pdrop', type=float, default=0.0, help='embd drop out rate')
         self.parser.add_argument('--n_head', type=int, default=4, help='transformer head')
@@ -60,7 +60,7 @@ class Args:
                                  help='the size for edge level transformer input')
         self.parser.add_argument('--embedding_size_edge_output', type=int, default=128,
                                  help='the size of edge output embedding')
-        self.parser.add_argument('--num_layers', type=int, default=4, help='layers of rnn')
+        self.parser.add_argument('--num_layers', type=int, default=2, help='layers of rnn')
         self.parser.add_argument('--nobfs', default=True, action='store_true',
                                  help='whether to use bfs constraint during sampling')
 
@@ -88,20 +88,20 @@ class Args:
         self.parser.add_argument('--num_workers', type=int, default=1, help='number of workers for dataloader')
         self.parser.add_argument('--epochs', type=int, default=200, help='epochs')
 
-        self.parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+        self.parser.add_argument('--lr', type=float, default=0.00001, help='learning rate')
         self.parser.add_argument('--gamma', type=float, default=0.3, help='Learning rate decay factor')
         self.parser.add_argument('--clip', default=True, action='store_true', help='whether to use clip gradient for generation model')
 
         #Evaluation config
-        self.parser.add_argument('--record', default='DAGG_gcn_gcn_nobfs_2023_05_16_11_26_39',
+        self.parser.add_argument('--record', default='DAGG_gcn_gcn_nobfs_2024_03_19_14_23_44',
                                  help='foloder name for evaluation')
-        self.parser.add_argument('--eval_epoch', default=1, help='which epoch to evaluate')
+        self.parser.add_argument('--eval_epoch', default=121, help='which epoch to evaluate')
         self.parser.add_argument('--count', default=40, help='number of graphs to be sampled')
         self.parser.add_argument('--metric_eval_batch_size', default=5, help='batch size for evaluation')
 
         # Model load parameters
         self.parser.add_argument('--load_model',  default=False, action='store_true', help='whether to load model')
-        self.parser.add_argument('--load_model_path', default='output/GRAN_Lung_unif_nobfs_2021_01_24_23_55_12/', help='load model path')
+        self.parser.add_argument('--load_model_path', default='output/DAGG_gcn_gcn_nobfs_2024_03_19_18_16_12/model_save/', help='load model path')
         self.parser.add_argument('--load_device', default='cuda:0' if torch.cuda.is_available() else 'cpu', help='load device: cuda:[d] | cpu')
         self.parser.add_argument('--epochs_end', type=int, default=100, help='model in which epoch to load')
         self.parser.add_argument('--current_dataset_path', default='datasets/caveman_small/graphs/', help='model in which epoch to load')
@@ -159,7 +159,7 @@ class Args:
 
         args.current_model_save_path = args.model_save_path
 
-        args.load_model_path = None
+        #args.load_model_path = None
 
 
         args.current_processed_dataset_path = None

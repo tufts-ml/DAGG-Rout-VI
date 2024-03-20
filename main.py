@@ -8,7 +8,7 @@ from utils import create_dirs,load_model
 from models.DAGG.model import DAGG
 from models.Rout.model import Rout
 from train import train
-from evaluate import evaluate
+#from evaluate import evaluate
 import datasets.process_dataset as gdata
 
 if __name__ == '__main__':
@@ -62,11 +62,14 @@ if __name__ == '__main__':
 
 
         # load test set, args.task needs to be "test" 
-        dataset_test = create_dataset(args)
+        dataset_test = gdata.load_graph_dataset(args)
+        graphs = p_model.sample(args.count)
+        
 
         # compute MMD values from multiple graphs statistics 
         # compute the approximate log-likelihood from importance sampling
-        evaluate(args, p_model, qmodel, dataset_test)
+        
+        #evaluate(args, p_model, qmodel, dataset_test)
 
     else:
 

@@ -2,7 +2,7 @@ import os
 import torch
 import warnings
 import pickle
-from utils import caveman_special 
+from utils import caveman_special
 
 def default_label_graph(G):
     for node in G.nodes():
@@ -14,11 +14,14 @@ def default_label_graph(G):
 def load_graph_dataset(args):
 
     if args.dataset =='caveman_small':
+        
 
         # save dataset to file
         current_dataset_path = os.path.join(args.dataset_path, args.dataset, 'graphs.dat')
 
         if args.produce_graphs or (not os.path.isfile(current_dataset_path)):
+            os.mkdir(os.path.join(args.dataset_path, args.dataset))
+            
             
             if not args.produce_graphs:
                 warnings.warn(f"Data file does not exist -- will create a new dataset using this file path: {current_dataset_path}")

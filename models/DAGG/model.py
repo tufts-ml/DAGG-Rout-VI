@@ -198,7 +198,7 @@ class DAGG(nn.Module):
 
         return log_like
 
-    def sample(self, size, batch_size=32):
+    def sample(self, size, batch_size=1):
         '''
         Sample graphs from the DAGG model.
         Args: 
@@ -233,7 +233,7 @@ class DAGG(nn.Module):
             # Initialize to node level start token
             node_level_input[:, 0, len_node_vec - 2] = 1
             past=None
-            past_e=None
+            
             for i in range(max_num_node):
                 # [batch_size] * [1] * [hidden_size_node_level_rnn]
                 node_level_input = self.node_project(node_level_input)
@@ -263,20 +263,25 @@ class DAGG(nn.Module):
 
                 # [batch_size] * [1] * [hidden_size_edge_level_rnn]
                 hidden_edge = self.embedding_node_to_edge(node_level_output)
-                hidden_edge = hidden_edge.view(hidden_edge.size(0), 1, hidden_edge.size(1))
+                #hidden_edge = hidden_edge.view(hidden_edge.size(0), 1, hidden_edge.size(1))
 
                 # [batch_size] * [1] * [edge_feature_len]
                 edge_level_input = torch.zeros(
                     batch_size, 1, len_edge_vec, device=self.args.device)
                 # Initialize to edge level start token
                 edge_level_input[:, 0, len_edge_vec - 2] = 1
+                edge_level_input = self.edge_project(edge_level_input)
+                edge_level_input = torch.cat([hidden_edge, edge_level_input], dim=1)
+                past_e = None
                 for j in range(min(num_nodes_to_consider, i)):
-                    # [batch_size] * [1] * [edge_feature_len]
-                    edge_level_input = self.edge_project(edge_level_input)
+                    # [batch_size] * [1] * [edge_feature_len]\
+                    if j != 0:
+                        edge_level_input = self.edge_project(edge_level_input)
                     edge_level_input = torch.cat([hidden_edge, edge_level_input], dim=1)
                     edge_level_output,past_e,_ = self.edge_level_transformer(edge_level_input,past_e)
+                    edge_level_output = self.output_edge(edge_level_output)
                     # [batch_size] * [edge_feature_len] needed for torch.multinomial
-                    edge_level_output = edge_level_output.reshape(
+                    edge_level_output = edge_level_output[:,-1].reshape(
                         batch_size, len_edge_vec)
 
                     # [batch_size]: Sampling index to set 1 in next edge_level input and x_pred_edge
@@ -396,8 +401,8 @@ class Graph_to_Adj_Matrix:
         # relabel graph
         seq = seq.cpu().numpy() #decide if really use learnable seq
         order_map = {seq[i]: i for i in range(n)}
-        graph = nx.relabel_nodes(in_graph, order_map)
-        #graph=in_graph
+        #graph = nx.relabel_nodes(in_graph, order_map)
+        graph=in_graph
 
         # 3D adjacecny matrix in case of edge_features (each A[i, j] is a len_edge_vec size vector)
         adj_mat_2d = torch.ones((n, num_nodes_to_consider))

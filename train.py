@@ -15,14 +15,13 @@ from utils import save_model, load_model, get_model_attribute, get_last_checkpoi
 
 def train(args, p_model, q_model, dataloader_train, dataloader_valid):
     """
-    maximize the elbo using `p_model` as the generative model $p(A)$ and `q_model` as the inference model $p(\pii | G)$ 
+    maximize the elbo using `p_model` as the generative model $p(A)$ and `q_model` as the inference model $p(\pi | G)$ 
     Args:
        args:
        p_model: nn.Module, the generative model
        q_model: nn.Module, the inference model
        dataloader_train: Dataloader
        dataloader_valid: Dataloader
-        
     """
 
     optimizer = optim.Adam([{"params": p_model.parameters()}, {"params": q_model.parameters()}], lr=args.lr)

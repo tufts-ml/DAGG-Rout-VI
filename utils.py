@@ -48,9 +48,9 @@ def save_model( args,epoch, gmodel, qmodel):
 
 
 def load_model(args,epoch):
-    gmodel_path = args.current_model_save_path + 'epoch' + '_' + 'gmodel' + '_' + str(epoch) + '.dat'
+    gmodel_path = args.load_model_path + 'epoch' + '_' + 'gmodel' + '_' + str(epoch) + '.dat'
     gmodel =torch.load(gmodel_path)
-    qmodel_path = args.current_model_save_path + 'epoch' + '_' + 'qmodel' + '_' + str(epoch) + '.dat'
+    qmodel_path = args.load_model_path + 'epoch' + '_' + 'qmodel' + '_' + str(epoch) + '.dat'
     qmodel = torch.load(qmodel_path)
     return gmodel, qmodel
 
