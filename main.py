@@ -64,6 +64,7 @@ if __name__ == '__main__':
         # load test set, args.task needs to be "test" 
         dataset_test = gdata.load_graph_dataset(args)
         graphs = p_model.sample(args.count)
+        a=3
         
 
         # compute MMD values from multiple graphs statistics 

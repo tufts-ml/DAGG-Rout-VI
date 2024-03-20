@@ -151,13 +151,18 @@ class DAGG(nn.Module):
 
         # Set hidden state for edge-level Transformer
         # shape of hidden tensor (num_layers, batch_size, hidden_size)
+        x_edge_len = x_edge_len.cpu()
         hidden_edge = hidden_edge.view(hidden_edge.size(0), 1, hidden_edge.size(1))
         edge_level_input = self.edge_project(edge_level_input)
+        # edge_level_input = pack_padded_sequence(
+        #         edge_level_input, x_edge_len, batch_first=True, enforce_sorted=False)
+
         edge_level_input = torch.cat([hidden_edge,edge_level_input], dim=1)
 
-        x_edge_len = x_edge_len.cpu()
+        #x_edge_len = x_edge_len.cpu()
         x_pred_edge,_,_ = self.edge_level_transformer(edge_level_input)
         x_pred_edge = x_pred_edge[:,1:]
+        # x_pred_edge, _ = pad_packed_sequence(x_pred_edge, batch_first=True)
         # cleaning the padding i.e setting it to zero
         x_pred_edge = self.output_edge(x_pred_edge)
         x_pred_node = pack_padded_sequence(
@@ -277,7 +282,7 @@ class DAGG(nn.Module):
                     # [batch_size] * [1] * [edge_feature_len]\
                     if j != 0:
                         edge_level_input = self.edge_project(edge_level_input)
-                    edge_level_input = torch.cat([hidden_edge, edge_level_input], dim=1)
+                    #edge_level_input = torch.cat([hidden_edge, edge_level_input], dim=1)
                     edge_level_output,past_e,_ = self.edge_level_transformer(edge_level_input,past_e)
                     edge_level_output = self.output_edge(edge_level_output)
                     # [batch_size] * [edge_feature_len] needed for torch.multinomial
