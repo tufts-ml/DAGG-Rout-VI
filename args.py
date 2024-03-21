@@ -48,17 +48,17 @@ class Args:
         self.parser.add_argument('--activation_function', type=str, default="relu", help='activation type in transformer')
         self.parser.add_argument('--initializer_range', type=float, default=0.02,
                                  help='activation type in transformer')
-        self.parser.add_argument('--hidden_size_node_level_transformer', type=int, default=128,
+        self.parser.add_argument('--hidden_size_node_level_transformer', type=int, default=256,
                                  help='hidden size for node level transformer')
-        self.parser.add_argument('--embedding_size_node_level_transformer', type=int, default=128,
+        self.parser.add_argument('--embedding_size_node_level_transformer', type=int, default=256,
                                  help='the size for node level transformer input')
-        self.parser.add_argument('--embedding_size_node_output', type=int, default=128,
+        self.parser.add_argument('--embedding_size_node_output', type=int, default=256,
                                  help='the size of node output embedding')
-        self.parser.add_argument('--hidden_size_edge_level_transformer', type=int, default=128,
+        self.parser.add_argument('--hidden_size_edge_level_transformer', type=int, default=256,
                                  help='hidden size for edge level transformer')
-        self.parser.add_argument('--embedding_size_edge_level_transformer', type=int, default=128,
+        self.parser.add_argument('--embedding_size_edge_level_transformer', type=int, default=256,
                                  help='the size for edge level transformer input')
-        self.parser.add_argument('--embedding_size_edge_output', type=int, default=128,
+        self.parser.add_argument('--embedding_size_edge_output', type=int, default=256,
                                  help='the size of edge output embedding')
         self.parser.add_argument('--num_layers', type=int, default=2, help='layers of rnn')
         self.parser.add_argument('--nobfs', default=True, action='store_true',
@@ -78,7 +78,7 @@ class Args:
         self.parser.add_argument('--gnn_pretrain_path', default='', help='petrained gnn path')
 
         # Specific to sampler of orders from the q distribution
-        self.parser.add_argument('--sample_size', type=int, default=10, help='sample size for gradient estimator')
+        self.parser.add_argument('--sample_size', type=int, default=2, help='sample size for gradient estimator')
         self.parser.add_argument('--use_mp_sampler',  default=True, action='store_true', help='Whether to multi-process for permutation sampler')
         self.parser.add_argument('--mp_num_workers', type=int, default=4, help='number of workers for permutation sampling')
 
@@ -86,7 +86,7 @@ class Args:
         # Training config
         self.parser.add_argument('--batch_size', type=int, default=1, help='batchsize')
         self.parser.add_argument('--num_workers', type=int, default=1, help='number of workers for dataloader')
-        self.parser.add_argument('--epochs', type=int, default=200, help='epochs')
+        self.parser.add_argument('--epochs', type=int, default=401, help='epochs')
 
         self.parser.add_argument('--lr', type=float, default=0.00001, help='learning rate')
         self.parser.add_argument('--gamma', type=float, default=0.3, help='Learning rate decay factor')
@@ -95,13 +95,13 @@ class Args:
         #Evaluation config
         self.parser.add_argument('--record', default='DAGG_gcn_gcn_nobfs_2024_03_19_14_23_44',
                                  help='foloder name for evaluation')
-        self.parser.add_argument('--eval_epoch', default=121, help='which epoch to evaluate')
+        self.parser.add_argument('--eval_epoch', default=300, help='which epoch to evaluate')
         self.parser.add_argument('--count', default=40, help='number of graphs to be sampled')
-        self.parser.add_argument('--metric_eval_batch_size', default=5, help='batch size for evaluation')
+        self.parser.add_argument('--metric_eval_batch_size', default=40, help='batch size for evaluation')
 
         # Model load parameters
         self.parser.add_argument('--load_model',  default=False, action='store_true', help='whether to load model')
-        self.parser.add_argument('--load_model_path', default='output/DAGG_gcn_gcn_nobfs_2024_03_19_18_16_12/model_save/', help='load model path')
+        self.parser.add_argument('--load_model_path', default='output/DAGG_gcn_gcn_nobfs_2024_03_20_00_52_25/model_save/', help='load model path')
         self.parser.add_argument('--load_device', default='cuda:0' if torch.cuda.is_available() else 'cpu', help='load device: cuda:[d] | cpu')
         self.parser.add_argument('--epochs_end', type=int, default=100, help='model in which epoch to load')
         self.parser.add_argument('--current_dataset_path', default='datasets/caveman_small/graphs/', help='model in which epoch to load')

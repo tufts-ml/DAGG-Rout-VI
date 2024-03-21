@@ -45,8 +45,8 @@ def evaluate(args, p_model, q_model, dataset_test):
         orbit_mmd.append(batch_orbit_mmd)
 
 
-    print('Evaluating {}, run at {}, epoch {}'.format(
-        args.fname, args.time, args.num_epochs))
+    # print('Evaluating {}, run at {}, epoch {}'.format(
+    #     args.fname, args.time, args.num_epochs))
 
     print_stats(
         node_count_avg_ref, node_count_avg_pred, edge_count_avg_ref, edge_count_avg_pred,

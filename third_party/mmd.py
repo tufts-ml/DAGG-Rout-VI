@@ -11,7 +11,7 @@ from eden.graph import vectorize
 
 def emd(x, y, distance_scaling=1.0):
     support_size = max(len(x), len(y))
-    d_mat = toeplitz(range(support_size)).astype(np.float)
+    d_mat = toeplitz(range(support_size)).astype(float)
     distance_mat = d_mat / distance_scaling
 
     emd_val = pyemd.emd(x, y, distance_mat)

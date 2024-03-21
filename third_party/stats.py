@@ -224,11 +224,12 @@ def orca(graph):
 
 
 def orbits_counts_worker(graph):
-    try:
-        orbit_counts = orca(graph)
-    except:
-        return None
-
+    # try:
+    #     orbit_counts = orca(graph)
+    # except:
+    #     return None
+    
+    orbit_counts = orca(graph)
     orbit_counts_graph = np.sum(orbit_counts, axis=0) / graph.number_of_nodes()
     return orbit_counts_graph
 
