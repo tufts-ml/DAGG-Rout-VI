@@ -8,7 +8,7 @@ class Args:
     def __init__(self):
         self.parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         # Logging & model saving
-        self.parser.add_argument('--task', default='evaluate', help='train or evaluate the model')
+        self.parser.add_argument('--task', default='train', help='train or evaluate the model')
         self.parser.add_argument('--clean_tensorboard', action='store_true', help='Clean tensorboard')
         self.parser.add_argument('--clean_temp', action='store_true', help='Clean temp folder')
         self.parser.add_argument('--log_tensorboard', action='store_true', help='Whether to use tensorboard for logging')
@@ -21,8 +21,6 @@ class Args:
         self.parser.add_argument('--device', default='cuda:0' if torch.cuda.is_available() else 'cpu', help='cuda:[d] | cpu')
         self.parser.add_argument('--enable_qdist', default=True, action='store_true', help='Whether to q or uniform distribution for sampling')
 
-        #self.parser.add_argument('--use_baseline', default=False ,action='store_true', help='Whether to run baseline or proposed method')
-        #self.parser.add_argument('--gen_model', default='GraphRNN', help='Algorithm Version -- GraphRNN | GraphGEN| DAGG')
 
         self.parser.add_argument('--seed', type=int, default=123, help='random seed to reproduce performance/dataset')
 
@@ -66,10 +64,10 @@ class Args:
 
         # Specify to the GNN for the q distribution
         self.parser.add_argument('--q_gnn_type', default='gcn', help='type of GNN for q model: { gat | gcn | appnp}')
-        self.parser.add_argument('--gnn_hidden_dim', type=int, default=32, help='gnn hidden dimension')
+        self.parser.add_argument('--gnn_hidden_dim', type=int, default=256, help='gnn hidden dimension')
         self.parser.add_argument('--gnn_out_dim', type=int, default=32, help='gnn output dimension')
         self.parser.add_argument('--gnn_in_feat_dropout', type=float, default=0.0, help='gnn input feature dropout rate')
-        self.parser.add_argument('--gnn_dropout', type=float, default=0.2, help='gnn hidden feature dropout rate')
+        self.parser.add_argument('--gnn_dropout', type=float, default=0.0, help='gnn hidden feature dropout rate')
         self.parser.add_argument('--gnn_num_layers', type=int, default=3, help='number of layers of gnn')
         self.parser.add_argument('--gnn_batch_norm',  default=True, action='store_true', help='whether to use batchnorm in gnn')
         self.parser.add_argument('--gnn_residual',  default=True, action='store_true', help='whether to residual connection in gnn')
@@ -86,7 +84,7 @@ class Args:
         # Training config
         self.parser.add_argument('--batch_size', type=int, default=1, help='batchsize')
         self.parser.add_argument('--num_workers', type=int, default=1, help='number of workers for dataloader')
-        self.parser.add_argument('--epochs', type=int, default=401, help='epochs')
+        self.parser.add_argument('--epochs', type=int, default=1001, help='epochs')
 
         self.parser.add_argument('--lr', type=float, default=0.00001, help='learning rate')
         self.parser.add_argument('--gamma', type=float, default=0.3, help='Learning rate decay factor')
@@ -95,13 +93,13 @@ class Args:
         #Evaluation config
         self.parser.add_argument('--record', default='DAGG_gcn_gcn_nobfs_2024_03_19_14_23_44',
                                  help='foloder name for evaluation')
-        self.parser.add_argument('--eval_epoch', default=300, help='which epoch to evaluate')
-        self.parser.add_argument('--count', default=40, help='number of graphs to be sampled')
-        self.parser.add_argument('--metric_eval_batch_size', default=40, help='batch size for evaluation')
+        self.parser.add_argument('--eval_epoch', default=1000, help='which epoch to evaluate')
+        self.parser.add_argument('--count', default=30, help='number of graphs to be sampled')
+        self.parser.add_argument('--metric_eval_batch_size', default=30, help='batch size for evaluation')
 
         # Model load parameters
         self.parser.add_argument('--load_model',  default=False, action='store_true', help='whether to load model')
-        self.parser.add_argument('--load_model_path', default='output/DAGG_gcn_gcn_nobfs_2024_03_20_00_52_25/model_save/', help='load model path')
+        self.parser.add_argument('--load_model_path', default='output/DAGG_gcn_gcn_nobfs_2024_03_22_17_10_59/model_save/', help='load model path')
         self.parser.add_argument('--load_device', default='cuda:0' if torch.cuda.is_available() else 'cpu', help='load device: cuda:[d] | cpu')
         self.parser.add_argument('--epochs_end', type=int, default=100, help='model in which epoch to load')
         self.parser.add_argument('--current_dataset_path', default='datasets/caveman_small/graphs/', help='model in which epoch to load')

@@ -5,14 +5,46 @@ import math
 from typing import NamedTuple
 from models.Rout.generation import generation
 from models.Rout.sequtils import  compute_in_batches,CachedLookup
-from torch_geometric.utils import (get_laplacian, to_scipy_sparse_matrix)
+from torch_geometric.utils import (get_laplacian, to_scipy_sparse_matrix,  scatter)
 from scipy.sparse.linalg import eigs, eigsh
 import numpy as np
 from torch.nn import DataParallel
 from models.Rout.gnn.net.appnp_net_node import APPNET
 from models.Rout.gnn.net.gat_net_node import GATNet
 from models.Rout.gnn.net.gcn_net_node import GCNNet
+from models.DAGG.attention import AttentionDecoder
+from models.DAGG.model import MLP_Plain
 
+
+
+
+
+def set_decode_type(model, decode_type):
+    if isinstance(model, DataParallel):
+        model = model.module
+    model.set_decode_type(decode_type)
+
+
+class AttentionModelFixed(NamedTuple):
+    """
+    Context for AttentionModel decoder that is fixed during decoding so can be precomputed/cached
+    This class allows for efficient indexing of multiple Tensors at once
+    """
+    node_embeddings: torch.Tensor
+    context_node_projected: torch.Tensor
+    glimpse_key: torch.Tensor
+    glimpse_val: torch.Tensor
+    logit_key: torch.Tensor
+
+    def __getitem__(self, key):
+        assert torch.is_tensor(key) or isinstance(key, slice)
+        return AttentionModelFixed(
+            node_embeddings=self.node_embeddings[key],
+            context_node_projected=self.context_node_projected[key],
+            glimpse_key=self.glimpse_key[:, key],  # dim 0 are the heads
+            glimpse_val=self.glimpse_val[:, key],  # dim 0 are the heads
+            logit_key=self.logit_key[key]
+        )
 
 
 class Rout(nn.Module):
@@ -38,15 +70,9 @@ class Rout(nn.Module):
         self.q_gnn_type=args.q_gnn_type
         self.args=args
         self.data_statistics=data_statistics
-        #self.model=model
-        if self.q_gnn_type == 'gcn':
-            self.gnn = GCNNet(args, 5, out_dim=32).to(args.device)
-        elif self.q_gnn_type == 'gat':
-            self.gnn = GATNet(args, 5, out_dim=32).to(args.device)
-        elif self.q_gnn_type == 'appnp':
-            self.gnn = APPNET(args, 5, out_dim=32).to(args.device)
-        else: 
-            raise Exception("No such GNN type: " + str(self.gnn_type))
+        
+        self.node_level_transformer = AttentionDecoder(args.gnn_out_dim, n_head=4)
+        self.node_project =  MLP_Plain(10, args.gnn_out_dim, args.gnn_out_dim)
 
         self.tanh_clipping = 10.
 
@@ -93,11 +119,12 @@ class Rout(nn.Module):
 
         #print("g device: ", g.device)
 
-        embeddings = self.add_PE(g)
+        embeddings = torch.cat([self.add_RandomWalkPE(g)[:,1:], self.add_PE(g)], dim=-1)
 
         #print("embeddings device:", embeddings.device()) 
-
-        embeddings = self.gnn(g, embeddings)
+        embeddings = self.node_project(embeddings).unsqueeze(0)
+        embeddings,_,_ = self.node_level_transformer(embeddings)
+        embeddings = embeddings.squeeze(0)
         embeddings = embeddings.repeat(n_samples, 1, 1)
 
 
@@ -118,6 +145,41 @@ class Rout(nn.Module):
         self.decode_type = decode_type
         if temp is not None:  # Do not change temperature if not provided
             self.temp = temp
+    
+    def add_RandomWalkPE(self, data, walk_length=6):
+        N = data.num_nodes()
+        edges = data.edges()
+
+        edge_index = torch.stack(edges)
+        row, col = edge_index
+
+        value = torch.ones(data.num_edges(), device=row.device)
+        value = scatter(value, row, dim_size=N, reduce='sum').clamp(min=1)[row]
+        value = 1.0 / value
+
+      
+        adj = torch.zeros((N, N), device=row.device)
+        adj[row, col] = value
+        loop_index = torch.arange(N, device=row.device)
+       
+
+        def get_pe(out):
+            
+            return out[loop_index, loop_index]
+
+        out = adj
+        pe_list = [get_pe(out)]
+        for _ in range(walk_length - 1):
+            out = out @ adj
+            pe_list.append(get_pe(out))
+
+        pe = torch.stack(pe_list, dim=-1)
+
+        return pe.to(edge_index.device)
+
+
+
+
 
     def add_PE(self, data, k=5):
         eig_fn = eigsh
@@ -142,11 +204,12 @@ class Rout(nn.Module):
 
         eig_vecs = np.real(eig_vecs[:, eig_vals.argsort()])
         pe = torch.from_numpy(eig_vecs[:, 1:k + 1])
-        sign = -1 + 2 * torch.randint(0, 2, (k,))
+        #sign = -1 + 2 * torch.randint(0, 2, (k,))
+        sign = 1
 
         pe *= sign
 
-        return pe.to(edge_index.device)
+        return torch.abs(pe.to(edge_index.device))
 
 
     def precompute_fixed(self, input):
@@ -516,32 +579,6 @@ class Rout(nn.Module):
 
 
 
-def set_decode_type(model, decode_type):
-    if isinstance(model, DataParallel):
-        model = model.module
-    model.set_decode_type(decode_type)
-
-
-class AttentionModelFixed(NamedTuple):
-    """
-    Context for AttentionModel decoder that is fixed during decoding so can be precomputed/cached
-    This class allows for efficient indexing of multiple Tensors at once
-    """
-    node_embeddings: torch.Tensor
-    context_node_projected: torch.Tensor
-    glimpse_key: torch.Tensor
-    glimpse_val: torch.Tensor
-    logit_key: torch.Tensor
-
-    def __getitem__(self, key):
-        assert torch.is_tensor(key) or isinstance(key, slice)
-        return AttentionModelFixed(
-            node_embeddings=self.node_embeddings[key],
-            context_node_projected=self.context_node_projected[key],
-            glimpse_key=self.glimpse_key[:, key],  # dim 0 are the heads
-            glimpse_val=self.glimpse_val[:, key],  # dim 0 are the heads
-            logit_key=self.logit_key[key]
-        )
 
 
 

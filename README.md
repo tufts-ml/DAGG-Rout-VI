@@ -6,7 +6,14 @@ through Maximum Likelihood Estimation](https://www.jmlr.org/papers/volume24/22-0
 
 This is a minimum working version of the code used for the paper.
 ## 0. Environment Setup
-enviroment setup: "pip install -r requirements.txt"
+enviroment setup 
+'''
+pip install -r requirements.txt
+'''
+Run build.sh script in the project's root directory for MMD computation.
+'''
+./build.sh
+'''
 
 
 

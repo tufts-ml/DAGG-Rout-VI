@@ -5,6 +5,7 @@ from torch.utils.data import Dataset
 from torch.utils.data._utils.collate import default_collate as collate
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from models.DAGG.helper import get_attributes_len_for_graph_rnn
+from datasets.preprocess import get_bfs_seq, get_random_bfs_seq
 import numpy as np
 import torch.nn.init as init
 import networkx as nx
@@ -386,28 +387,21 @@ class Graph_to_Adj_Matrix:
 
         return {'x': x_item, 'len': len(adj_feature_mat)}
 
-
-    # note that the graph should only have integer labels by now. 
     def graph_to_matrix(self, in_graph, perm):
 
 
         n = len(in_graph.nodes())
-
-        #len_node_vec, _, num_nodes_to_consider = get_attributes_len_for_graph_rnn(
-        #    len(node_map), len(edge_map), self.max_prev_node, self.max_head_and_tail)
         
         len_node_vec          = self.len_node_vec           
-        num_nodes_to_consider = self.num_nodes_to_consider 
+        num_nodes_to_consider = self.num_nodes_to_consider
 
+        
+        n = len(in_graph.nodes())
+        
 
-        # TODO: examine the permutation is legal
-        seq = perm
+        order_map = {perm[i]: i for i in range(n)}
+        graph = nx.relabel_nodes(in_graph, order_map)
 
-        # relabel graph
-        seq = seq.cpu().numpy() #decide if really use learnable seq
-        order_map = {seq[i]: i for i in range(n)}
-        #graph = nx.relabel_nodes(in_graph, order_map)
-        graph=in_graph
 
         # 3D adjacecny matrix in case of edge_features (each A[i, j] is a len_edge_vec size vector)
         adj_mat_2d = torch.ones((n, num_nodes_to_consider))
@@ -487,9 +481,6 @@ class MLP_Plain(nn.Module):
             nn.Linear(input_size, embedding_size),
             nn.ReLU(),
             nn.Dropout(p=dropout),
-            # nn.Linear(embedding_size, embedding_size),
-            # nn.ReLU(),
-            # nn.Dropout(p=dropout),
             nn.Linear(embedding_size, output_size),
         )
 

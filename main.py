@@ -25,7 +25,7 @@ if __name__ == '__main__':
     data_statistics = gdata.get_data_statistics(graph_dataset)
 
 
-    dataset_train, dataset_validate, dataset_test = dgl.data.utils.split_dataset(graph_dataset, frac_list=[0.8, 0.1, 0.1], shuffle=True)
+    dataset_train, dataset_validate, dataset_test = dgl.data.utils.split_dataset(graph_dataset, frac_list=[0.8, 0.1, 0.1])
 
 
     if args.task == "train":
@@ -61,14 +61,10 @@ if __name__ == '__main__':
         p_model,qmodel = load_model(args, args.eval_epoch)
 
 
-        # load test set, args.task needs to be "test" 
+        # load test set.
         graph_dataset = gdata.load_graph_dataset(args)
-        #graphs = p_model.sample(args.count)
-        dataset_train, dataset_validate, dataset_test = dgl.data.utils.split_dataset(graph_dataset, frac_list=[0.8, 0.1, 0.1], shuffle=False)
+        dataset_train, dataset_validate, dataset_test = dgl.data.utils.split_dataset(graph_dataset, frac_list=[0.8, 0.1, 0.1])
         
-       
-        
-
         # compute MMD values from multiple graphs statistics 
         # compute the approximate log-likelihood from importance sampling
         

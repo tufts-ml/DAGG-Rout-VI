@@ -94,8 +94,8 @@ def get_random_bfs_seq(graph):
     n = len(graph.nodes())
     # Create a random permutaion of graph nodes
     perm = torch.randperm(n)
-    adj = nx.to_numpy_matrix(graph, nodelist=perm.numpy().tolist(), dtype=int)
-    G = nx.from_numpy_matrix(adj)
+    adj = nx.to_numpy_array(graph, nodelist=perm.numpy().tolist(), dtype=int)
+    G = nx.from_numpy_array(adj)
 
     # Construct bfs ordering starting from a random node
     start_id = 0

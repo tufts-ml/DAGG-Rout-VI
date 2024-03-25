@@ -155,7 +155,7 @@ def clustering_worker(param):
     return hist
 
 
-def clustering_stats(graph_ref_list, graph_pred_list, bins=100):
+def clustering_stats(graph_ref_list, graph_pred_list, bins=10):
     sample_ref = []
     sample_pred = []
     graph_pred_list = [
@@ -173,7 +173,7 @@ def clustering_stats(graph_ref_list, graph_pred_list, bins=100):
             sample_pred.append(clustering_hist)
 
     mmd_dist = mmd.compute_mmd(sample_ref, sample_pred, metric=partial(
-        mmd.gaussian_emd, sigma=0.1, distance_scaling=bins), n_jobs=MAX_WORKERS)
+        mmd.gaussian_emd, sigma=0.1, distance_scaling=bins*2.5), n_jobs=MAX_WORKERS)
 
     elapsed = datetime.now() - prev
     if PRINT_TIME:
@@ -256,7 +256,7 @@ def orbit_stats_all(graph_ref_list, graph_pred_list):
     total_counts_pred = np.array(total_counts_pred)
 
     mmd_dist = mmd.compute_mmd(total_counts_ref, total_counts_pred, metric=partial(
-        mmd.gaussian, sigma=30.0), is_hist=False, n_jobs=MAX_WORKERS)
+        mmd.gaussian, sigma=75.0), is_hist=False, n_jobs=MAX_WORKERS)
 
     elapsed = datetime.now() - prev
     if PRINT_TIME:

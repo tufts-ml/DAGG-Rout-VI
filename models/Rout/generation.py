@@ -107,7 +107,7 @@ class generation(NamedTuple):
     def get_current_node(self):
         return self.prev_a
 
-    def get_mask(self):
+    def get_mask(self, edge_index):
         return self.visited > 0  # Hacky way to return bool or uint8 depending on pytorch version
 
     def get_connected_mask(self, edge_index):
