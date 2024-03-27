@@ -377,7 +377,6 @@ class Graph_to_Adj_Matrix:
         self.feature_len = len_node_vec + num_nodes_to_consider * len_edge_vec
 
     def __call__(self, graph, perm=None):
-        # TODO given a graph and permutation, return an adj matrix, i.e., reimplement Graph_Adj_Matrix_from_file.__getitem__
 
         x_item = torch.zeros((self.data_statistics["max_num_nodes"], self.feature_len))
 

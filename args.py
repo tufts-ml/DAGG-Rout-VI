@@ -8,7 +8,7 @@ class Args:
     def __init__(self):
         self.parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         # Logging & model saving
-        self.parser.add_argument('--task', default='train', help='train or evaluate the model')
+        self.parser.add_argument('--task', default='evaluate', help='train or evaluate the model')
         self.parser.add_argument('--clean_tensorboard', action='store_true', help='Clean tensorboard')
         self.parser.add_argument('--clean_temp', action='store_true', help='Clean temp folder')
         self.parser.add_argument('--log_tensorboard', action='store_true', help='Whether to use tensorboard for logging')
@@ -91,18 +91,19 @@ class Args:
         self.parser.add_argument('--clip', default=True, action='store_true', help='whether to use clip gradient for generation model')
 
         #Evaluation config
-        self.parser.add_argument('--record', default='DAGG_gcn_gcn_nobfs_2024_03_19_14_23_44',
+        self.parser.add_argument('--record', default='DAGG_Rout',
                                  help='foloder name for evaluation')
-        self.parser.add_argument('--eval_epoch', default=1000, help='which epoch to evaluate')
+        self.parser.add_argument('--eval_epoch', default=400, help='which epoch to evaluate')
         self.parser.add_argument('--count', default=30, help='number of graphs to be sampled')
         self.parser.add_argument('--metric_eval_batch_size', default=30, help='batch size for evaluation')
 
         # Model load parameters
         self.parser.add_argument('--load_model',  default=False, action='store_true', help='whether to load model')
-        self.parser.add_argument('--load_model_path', default='output/DAGG_gcn_gcn_nobfs_2024_03_22_17_10_59/model_save/', help='load model path')
+        self.parser.add_argument('--load_model_path', default='output/exp_name/model_save/', help='load model path')
         self.parser.add_argument('--load_device', default='cuda:0' if torch.cuda.is_available() else 'cpu', help='load device: cuda:[d] | cpu')
         self.parser.add_argument('--epochs_end', type=int, default=100, help='model in which epoch to load')
         self.parser.add_argument('--current_dataset_path', default='datasets/caveman_small/graphs/', help='model in which epoch to load')
+        self.parser.add_argument('--sample_size_likelihood', type=int, default=10, help='sample size for likelihood estimation')
 
 
 

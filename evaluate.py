@@ -57,7 +57,7 @@ def evaluate(args, p_model, q_model, dataset_test):
         edge_count_avg_pred, degree_mmd, clustering_mmd, orbit_mmd, args)
 
 
-    graph_likelihood = model_likelihood(args, p_model, q_model, dataset_test, args.sample_size)
+    graph_likelihood = model_likelihood(args, p_model, q_model, dataset_test, args.sample_size_likelihood)
 
     print('Estimated log likelihood per graph is:')
     print(graph_likelihood)

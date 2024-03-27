@@ -173,7 +173,7 @@ def clustering_stats(graph_ref_list, graph_pred_list, bins=10):
             sample_pred.append(clustering_hist)
 
     mmd_dist = mmd.compute_mmd(sample_ref, sample_pred, metric=partial(
-        mmd.gaussian_emd, sigma=0.1, distance_scaling=bins*2.5), n_jobs=MAX_WORKERS)
+        mmd.gaussian_emd, sigma=0.1, distance_scaling=bins*3), n_jobs=MAX_WORKERS)
 
     elapsed = datetime.now() - prev
     if PRINT_TIME:

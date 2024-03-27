@@ -6,9 +6,6 @@ class generation(NamedTuple):
     # Fixed input
     loc: torch.Tensor #node_embedding (batch, step, feature_dim)
     dist: torch.Tensor
-
-    # If this state contains multiple copies (i.e. beam search) for the same instance, then for memory efficiency
-    # the loc and dist tensors are not kept multiple times, so we need to use the ids to index the correct rows.
     ids: torch.Tensor  # Keeps track of original fixed data index of rows
 
     # State
