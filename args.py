@@ -8,7 +8,7 @@ class Args:
     def __init__(self):
         self.parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         # Logging & model saving
-        self.parser.add_argument('--task', default='evaluate', help='train or evaluate the model')
+        self.parser.add_argument('--task', default='train', help='train or evaluate the model')
         self.parser.add_argument('--clean_tensorboard', action='store_true', help='Clean tensorboard')
         self.parser.add_argument('--clean_temp', action='store_true', help='Clean temp folder')
         self.parser.add_argument('--log_tensorboard', action='store_true', help='Whether to use tensorboard for logging')
@@ -27,7 +27,7 @@ class Args:
         # Dataset specification
         self.parser.add_argument('--dataset', default='caveman_small', help='Select dataset to train the model')
         self.parser.add_argument('--num_graphs', type=int, default=None, help='take complete dataset(None) | part of dataset')
-        self.parser.add_argument('--produce_graphs', default=False, action='store_true', help='Whether to reproduce graphs from a known distribution (e.g. SBM)')
+        self.parser.add_argument('--produce_graphs', default=True, action='store_true', help='Whether to reproduce graphs from a known distribution (e.g. SBM)')
         self.parser.add_argument('--label', default=False, action='store_true', help='Whether to use label infomation in dataset')
 
         #Specific to transformer in DAGG generative model 
